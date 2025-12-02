@@ -1,0 +1,118 @@
+import React from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell
+} from 'recharts';
+import { Transaction } from '../types';
+import { formatCurrency } from './UI';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
+
+interface ChartsProps {
+  transactions: Transaction[];
+}
+
+export const MonthlyChart = ({ transactions }: ChartsProps) => {
+  // Aggregate data by month
+  const data = React.useMemo(() => {
+    const monthlyData: Record<string, { name: string; Receitas: number; Despesas: number }> = {};
+    
+    transactions.forEach(t => {
+      const date = new Date(t.date);
+      const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+      const monthLabel = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { name: monthLabel, Receitas: 0, Despesas: 0 };
+      }
+
+      if (t.type === 'receita') {
+        monthlyData[monthKey].Receitas += t.amount;
+      } else {
+        monthlyData[monthKey].Despesas += t.amount;
+      }
+    });
+
+    // Sort by date (simple string compare works for YYYY-MM structure usually, but let's be cleaner if we had more logic)
+    // For now, object keys iteration order isn't guaranteed, so let's map and sort.
+    return Object.keys(monthlyData)
+      .sort() // Works for YYYY-MM
+      .map(key => monthlyData[key]);
+  }, [transactions]);
+
+  if (data.length === 0) return <div className="text-center text-slate-400 py-10">Sem dados suficientes</div>;
+
+  return (
+    <div className="h-72 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+          <YAxis 
+            stroke="#64748b" 
+            fontSize={12} 
+            tickLine={false} 
+            axisLine={false} 
+            tickFormatter={(val) => new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short', style: 'currency', currency: 'BRL' }).format(val)} 
+          />
+          <Tooltip 
+            cursor={{ fill: '#f1f5f9' }}
+            formatter={(value: number) => formatCurrency(value)}
+            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+          />
+          <Legend />
+          <Bar dataKey="Receitas" fill="#10b981" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+export const CategoryChart = ({ transactions }: ChartsProps) => {
+  const data = React.useMemo(() => {
+    const expenses = transactions.filter(t => t.type === 'despesa');
+    const catData: Record<string, number> = {};
+
+    expenses.forEach(t => {
+      catData[t.category] = (catData[t.category] || 0) + t.amount;
+    });
+
+    return Object.entries(catData)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6); // Top 6
+  }, [transactions]);
+
+  if (data.length === 0) return <div className="text-center text-slate-400 py-10">Sem despesas registradas</div>;
+
+  return (
+    <div className="h-72 w-full flex justify-center">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={80}
+            paddingAngle={5}
+            dataKey="value"
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip 
+             formatter={(value: number) => formatCurrency(value)}
+             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+          />
+          <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }}/>
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
