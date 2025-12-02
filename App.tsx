@@ -629,6 +629,20 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
 
 // 5. Settings Page
 const SettingsPage = () => {
+  const [apiKey, setApiKey] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const key = localStorage.getItem('gemini_api_key');
+    if (key) setApiKey(key);
+  }, []);
+
+  const handleSaveKey = () => {
+    localStorage.setItem('gemini_api_key', apiKey);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
   const handleLogout = () => {
      localStorage.removeItem('app_authenticated');
      window.location.reload();
@@ -649,6 +663,25 @@ const SettingsPage = () => {
         </div>
       </Card>
       
+      <Card>
+         <h3 className="text-lg font-bold text-slate-800 mb-4">Configuração da IA</h3>
+         <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+               Para usar o "Consultor AI", você precisa de uma chave gratuita do Google. 
+               <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 hover:underline ml-1">Gerar Chave aqui</a>.
+            </p>
+            <Input 
+               label="Chave da API Google Gemini" 
+               value={apiKey} 
+               onChange={e => setApiKey(e.target.value)} 
+               placeholder="Cole sua chave aqui (começa com AIza...)"
+            />
+            <Button onClick={handleSaveKey} variant={saved ? "success" : "primary"} className="w-full">
+               {saved ? 'Chave Salva!' : 'Salvar Chave'}
+            </Button>
+         </div>
+      </Card>
+
       <Card>
         <h3 className="text-lg font-bold text-slate-800 mb-2">Conta</h3>
         <Button onClick={handleLogout} variant="danger" className="w-full">
