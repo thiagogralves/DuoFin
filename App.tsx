@@ -1,37 +1,62 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
-  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconDownload, IconUpload
+  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu
 } from './components/Icons';
-import { Card, Button, Input, Select, formatCurrency } from './components/UI';
+import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
 import { MonthlyChart, CategoryChart } from './components/Charts';
-import { Transaction, Investment, User, InvestmentType, TransactionType } from './types';
+import { Transaction, Investment, User, InvestmentType, TransactionType, Budget } from './types';
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
 import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
 
+// --- Helper Functions ---
+const getMonthLabel = (date: Date) => {
+  return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
 // --- Sub-components ---
 
-// 1. Transactions List Component
+// 1. Transactions List Component with Filters
 const TransactionsPage = ({ 
   transactions, 
   onAdd, 
   onDelete,
-  isLoading
+  isLoading,
+  customCategories,
+  onAddCategory,
+  currentDate,
+  onMonthChange,
+  onGenerateRecurring,
+  currentUser
 }: { 
   transactions: Transaction[]; 
   onAdd: (t: Omit<Transaction, 'id'>) => void; 
   onDelete: (id: string) => void;
   isLoading: boolean;
+  customCategories: { id: string, name: string, type: string }[];
+  onAddCategory: (name: string, type: string) => void;
+  currentDate: Date;
+  onMonthChange: (d: Date) => void;
+  onGenerateRecurring: () => void;
+  currentUser: User;
 }) => {
   const [form, setForm] = useState({
     description: '',
     amount: '',
     type: 'despesa' as TransactionType,
-    category: CATEGORIES.EXPENSE[0],
-    user: 'Ambos' as User,
-    date: new Date().toISOString().split('T')[0]
+    category: '',
+    date: new Date().toISOString().split('T')[0],
+    is_recurring: false
   });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+
+  // Initial Category Setup
+  useEffect(() => {
+    const defaultCat = form.type === 'receita' ? CATEGORIES.INCOME[0] : CATEGORIES.EXPENSE[0];
+    if (!form.category) setForm(f => ({ ...f, category: defaultCat }));
+  }, [form.type]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,10 +67,20 @@ const TransactionsPage = ({
       amount: Number(form.amount),
       type: form.type,
       category: form.category,
-      user: form.user,
-      date: form.date
+      user: currentUser, // Auto-assign current user
+      date: form.date,
+      is_recurring: form.is_recurring
     });
-    setForm({ ...form, description: '', amount: '' });
+    setForm({ ...form, description: '', amount: '', is_recurring: false });
+  };
+
+  const handleCreateCategory = () => {
+    if (newCatName) {
+      onAddCategory(newCatName, form.type);
+      setForm({ ...form, category: newCatName });
+      setIsModalOpen(false);
+      setNewCatName('');
+    }
   };
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -57,65 +92,124 @@ const TransactionsPage = ({
     });
   };
 
+  const availableCategories = useMemo(() => {
+    const defaultCats = form.type === 'receita' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE;
+    const customCats = customCategories.filter(c => c.type === form.type).map(c => c.name);
+    return [...defaultCats, ...customCats].sort();
+  }, [form.type, customCategories]);
+
+  // Filter Transactions by Selected Month AND Current User
+  const filteredTransactions = transactions.filter(t => {
+    const tDate = new Date(t.date);
+    const dateMatch = tDate.getMonth() === currentDate.getMonth() && tDate.getFullYear() === currentDate.getFullYear();
+    const userMatch = currentUser === 'Ambos' ? true : t.user === currentUser;
+    return dateMatch && userMatch;
+  });
+
   return (
     <div className="space-y-6">
-      <Card className="border-l-4 border-l-blue-500">
-        <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-          <IconPlus className="w-5 h-5" /> Nova Movimentação
+      {/* Month Selector */}
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-slate-100 rounded-full">
+           &lt; Anterior
+        </button>
+        <h2 className="text-xl font-bold text-slate-800 capitalize flex items-center gap-2">
+           <IconCalendar className="w-5 h-5 text-slate-500"/> {getMonthLabel(currentDate)}
         </h2>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Input 
-            label="Descrição" 
-            value={form.description} 
-            onChange={e => setForm({...form, description: e.target.value})} 
-            placeholder="Ex: Compra Mercado"
-          />
-          <Input 
-            label="Valor (R$)" 
-            type="number" 
-            value={form.amount} 
-            onChange={e => setForm({...form, amount: e.target.value})} 
-            placeholder="0,00"
-          />
-           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold uppercase text-slate-500">Data</label>
-            <input 
-              type="date" 
-              value={form.date} 
-              onChange={e => setForm({...form, date: e.target.value})}
-              className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-slate-100 rounded-full">
+           Próximo &gt;
+        </button>
+      </div>
+
+      <div className="flex justify-end">
+         <Button variant="secondary" onClick={onGenerateRecurring} className="text-sm">
+            <IconRefresh className="w-4 h-4" /> Checar Recorrentes
+         </Button>
+      </div>
+
+      {currentUser === 'Ambos' ? (
+        <Card className="bg-slate-50 border-dashed border-2 border-slate-200 text-center py-8">
+           <p className="text-slate-500 font-medium">Selecione o perfil de <span className="text-blue-600 font-bold">Thiago</span> ou <span className="text-pink-600 font-bold">Marcela</span> no topo da página para adicionar novas movimentações.</p>
+        </Card>
+      ) : (
+        <Card className={`border-l-4 ${currentUser === 'Thiago' ? 'border-l-blue-500' : 'border-l-pink-500'}`}>
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <IconPlus className="w-5 h-5" /> Nova Movimentação ({currentUser})
+          </h2>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-2">
+              <Input 
+                label="Descrição" 
+                value={form.description} 
+                onChange={e => setForm({...form, description: e.target.value})} 
+                placeholder="Ex: Compra Mercado"
+              />
+            </div>
+            <Input 
+              label="Valor (R$)" 
+              type="number" 
+              value={form.amount} 
+              onChange={e => setForm({...form, amount: e.target.value})} 
+              placeholder="0,00"
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold uppercase text-slate-500">Tipo</label>
-            <select 
-              value={form.type} 
-              onChange={handleTypeChange}
-              className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="receita">Receita</option>
-              <option value="despesa">Despesa</option>
-            </select>
-          </div>
-          <Select 
-            label="Categoria"
-            value={form.category}
-            onChange={e => setForm({...form, category: e.target.value})}
-            options={form.type === 'receita' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE}
-          />
-          <Select 
-            label="Responsável"
-            value={form.user}
-            onChange={e => setForm({...form, user: e.target.value as User})}
-            options={USERS}
-          />
-          <div className="lg:col-span-3 flex justify-end">
-            <Button disabled={isLoading} className="w-full md:w-auto">
-              {isLoading ? 'Salvando...' : 'Adicionar'}
-            </Button>
-          </div>
-        </form>
-      </Card>
+            <div className="flex flex-col gap-1 w-full">
+              <label className="text-xs font-semibold uppercase text-slate-500">Data</label>
+              <input 
+                type="date" 
+                value={form.date} 
+                onChange={e => setForm({...form, date: e.target.value})}
+                className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
+              />
+            </div>
+            <div className="flex flex-col gap-1 w-full">
+              <label className="text-xs font-semibold uppercase text-slate-500">Tipo</label>
+              <select 
+                value={form.type} 
+                onChange={handleTypeChange}
+                className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
+              >
+                <option value="receita">Receita</option>
+                <option value="despesa">Despesa</option>
+              </select>
+            </div>
+            <div className="flex items-end gap-2 lg:col-span-2">
+              <div className="flex-1">
+                <Select 
+                  label="Categoria"
+                  value={form.category}
+                  onChange={e => setForm({...form, category: e.target.value})}
+                  options={availableCategories}
+                />
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-slate-200 text-slate-700 p-2.5 rounded-lg hover:bg-slate-300 transition-colors mb-[1px]"
+                title="Nova Categoria"
+              >
+                <IconPlus className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="lg:col-span-1 flex items-center pt-5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={form.is_recurring} 
+                    onChange={e => setForm({...form, is_recurring: e.target.checked})}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="text-sm text-slate-700 font-medium">Fixa/Recorrente?</span>
+              </label>
+            </div>
+            <div className="lg:col-span-4 flex justify-end mt-2">
+              <Button disabled={isLoading} className="w-full md:w-auto px-8">
+                {isLoading ? 'Salvando...' : 'Adicionar Movimentação'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -131,9 +225,12 @@ const TransactionsPage = ({
               </tr>
             </thead>
             <tbody>
-              {transactions.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
+              {filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
                 <tr key={t.id} className="border-b hover:bg-slate-50">
-                  <td className="p-4 whitespace-nowrap">{new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                  <td className="p-4 whitespace-nowrap">
+                    {new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                    {t.is_recurring && <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200">FIXA</span>}
+                  </td>
                   <td className="p-4 font-medium text-slate-800 whitespace-nowrap">{t.description}</td>
                   <td className="p-4">
                     <span className={`px-2 py-1 rounded-full text-xs ${t.user === 'Thiago' ? 'bg-blue-100 text-blue-700' : t.user === 'Marcela' ? 'bg-pink-100 text-pink-700' : 'bg-purple-100 text-purple-700'}`}>
@@ -151,10 +248,10 @@ const TransactionsPage = ({
                   </td>
                 </tr>
               ))}
-              {transactions.length === 0 && (
+              {filteredTransactions.length === 0 && (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-400">
-                    {isLoading ? 'Carregando transações...' : 'Nenhuma transação encontrada.'}
+                    Nenhuma transação encontrada neste mês para {currentUser === 'Ambos' ? 'Geral' : currentUser}.
                   </td>
                 </tr>
               )}
@@ -162,27 +259,221 @@ const TransactionsPage = ({
           </table>
         </div>
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova Categoria">
+         <div className="space-y-4">
+            <Input 
+              label="Nome da Categoria" 
+              value={newCatName} 
+              onChange={e => setNewCatName(e.target.value)}
+              placeholder="Ex: Natação, Reforma..."
+            />
+            <Button onClick={handleCreateCategory} className="w-full">Criar</Button>
+         </div>
+      </Modal>
     </div>
   );
 };
 
-// 2. Investments Page Component
+// 2. Dashboard Component with Month Filter and Goals
+const DashboardPage = ({ 
+  transactions, 
+  stats,
+  budgets,
+  onUpdateBudget,
+  currentDate,
+  onMonthChange,
+  currentUser
+}: { 
+  transactions: Transaction[]; 
+  stats: any;
+  budgets: Budget[];
+  onUpdateBudget: (cat: string, limit: number) => void;
+  currentDate: Date;
+  onMonthChange: (d: Date) => void;
+  currentUser: User;
+}) => {
+  const [editingBudget, setEditingBudget] = useState<{cat: string, val: string} | null>(null);
+
+  // Filter Transactions by Selected Month AND User
+  const filteredTransactions = transactions.filter(t => {
+    const tDate = new Date(t.date);
+    const dateMatch = tDate.getMonth() === currentDate.getMonth() && tDate.getFullYear() === currentDate.getFullYear();
+    const userMatch = currentUser === 'Ambos' ? true : t.user === currentUser;
+    return dateMatch && userMatch;
+  });
+  
+  // Calculate Stats for FILTERED transactions
+  const monthlyStats = useMemo(() => {
+    const income = filteredTransactions.filter(t => t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
+    const expenses = filteredTransactions.filter(t => t.type === 'despesa').reduce((acc, t) => acc + t.amount, 0);
+    return { income, expenses, balance: income - expenses };
+  }, [filteredTransactions]);
+
+  // Calculate spending per category for Budgets
+  const spendingByCategory = useMemo(() => {
+    const spending: Record<string, number> = {};
+    filteredTransactions.filter(t => t.type === 'despesa').forEach(t => {
+       spending[t.category] = (spending[t.category] || 0) + t.amount;
+    });
+    return spending;
+  }, [filteredTransactions]);
+
+  const handleBudgetSave = () => {
+    if (editingBudget) {
+      onUpdateBudget(editingBudget.cat, Number(editingBudget.val));
+      setEditingBudget(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+       {/* Month Selector */}
+       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6">
+        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-slate-100 rounded-full">
+           &lt; Anterior
+        </button>
+        <h2 className="text-xl font-bold text-slate-800 capitalize flex items-center gap-2">
+           <IconCalendar className="w-5 h-5 text-slate-500"/> {getMonthLabel(currentDate)}
+        </h2>
+        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-slate-100 rounded-full">
+           Próximo &gt;
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-l-4 border-l-emerald-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500">Saldo do Mês</p>
+              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.balance)}</h3>
+            </div>
+            <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
+                <IconWallet />
+            </div>
+          </div>
+        </Card>
+        <Card className="border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500">Receitas</p>
+              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.income)}</h3>
+            </div>
+            <div className="p-2 bg-blue-100 rounded-full text-blue-600">
+                <IconTrendingUp />
+            </div>
+          </div>
+        </Card>
+        <Card className="border-l-4 border-l-rose-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500">Despesas</p>
+              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.expenses)}</h3>
+            </div>
+            <div className="p-2 bg-rose-100 rounded-full text-rose-600">
+                <IconTrendingDown />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <h3 className="text-lg font-bold text-slate-800 mb-4">Fluxo Diário (Mês)</h3>
+          <MonthlyChart transactions={filteredTransactions} />
+        </Card>
+        <Card>
+          <h3 className="text-lg font-bold text-slate-800 mb-4">Gastos por Categoria</h3>
+          <CategoryChart transactions={filteredTransactions} />
+        </Card>
+      </div>
+
+      {/* Budgets / Metas Section */}
+      <Card>
+         <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+               <IconTarget className="w-5 h-5 text-indigo-500" /> Metas de Gastos (Orçamento)
+            </h3>
+            <button 
+               className="text-sm text-blue-600 hover:underline"
+               onClick={() => alert('Clique em uma categoria para definir o limite mensal.')}
+            >
+               Como funciona?
+            </button>
+         </div>
+         
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+            {Object.keys(spendingByCategory).map(cat => {
+               const budget = budgets.find(b => b.category === cat);
+               const limit = budget ? budget.limit_amount : 0;
+               return (
+                  <div key={cat} className="cursor-pointer group" onClick={() => setEditingBudget({ cat, val: String(limit) })}>
+                     {limit > 0 ? (
+                        <ProgressBar 
+                           label={cat} 
+                           current={spendingByCategory[cat]} 
+                           max={limit} 
+                        />
+                     ) : (
+                        <div className="flex justify-between items-center p-2 rounded hover:bg-slate-50 border border-transparent hover:border-slate-100 mb-2">
+                           <span className="text-slate-700 font-medium">{cat}</span>
+                           <span className="text-xs text-blue-500 opacity-0 group-hover:opacity-100">Definir Meta +</span>
+                           <span className="text-slate-500 font-bold">{formatCurrency(spendingByCategory[cat])}</span>
+                        </div>
+                     )}
+                  </div>
+               );
+            })}
+            {Object.keys(spendingByCategory).length === 0 && (
+               <p className="text-slate-400">Cadastre despesas neste mês para definir metas.</p>
+            )}
+         </div>
+      </Card>
+
+      <Modal isOpen={!!editingBudget} onClose={() => setEditingBudget(null)} title="Definir Meta de Gasto Mensal">
+         <div className="space-y-4">
+            <p className="text-sm text-slate-600">Categoria: <strong>{editingBudget?.cat}</strong></p>
+            <Input 
+               label="Limite Máximo (R$)" 
+               type="number"
+               value={editingBudget?.val || ''} 
+               onChange={e => setEditingBudget(prev => prev ? {...prev, val: e.target.value} : null)}
+            />
+            <Button onClick={handleBudgetSave} className="w-full">Salvar Meta</Button>
+         </div>
+      </Modal>
+      
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg">
+          <div>
+            <h3 className="text-xl font-bold">Patrimônio Investido ({currentUser})</h3>
+            <p className="opacity-80">Total Acumulado</p>
+          </div>
+          <div className="text-3xl font-bold text-emerald-400">
+            {formatCurrency(stats.invested)}
+          </div>
+      </div>
+    </div>
+  );
+};
+
+// 3. Investments Page
 const InvestmentsPage = ({ 
   investments, 
   onAdd, 
   onDelete,
-  isLoading
+  isLoading,
+  currentUser
 }: { 
   investments: Investment[]; 
   onAdd: (i: Omit<Investment, 'id' | 'history'>, initialAmount: number) => void; 
   onDelete: (id: string) => void;
   isLoading: boolean;
+  currentUser: User;
 }) => {
   const [form, setForm] = useState({
     name: '',
     type: 'geral' as InvestmentType,
-    amount: '',
-    user: 'Ambos' as User
+    amount: ''
   });
 
   const handleAdd = (e: React.FormEvent) => {
@@ -193,13 +484,17 @@ const InvestmentsPage = ({
       name: form.name,
       type: form.type,
       currentAmount: 0,
-      user: form.user
+      user: currentUser
     }, Number(form.amount));
     setForm({ ...form, name: '', amount: '' });
   };
 
-  const emergencyFund = investments.filter(i => i.type === 'emergencia');
-  const generalInvestments = investments.filter(i => i.type === 'geral');
+  const filteredInvestments = investments.filter(i => 
+    currentUser === 'Ambos' ? true : i.user === currentUser
+  );
+
+  const emergencyFund = filteredInvestments.filter(i => i.type === 'emergencia');
+  const generalInvestments = filteredInvestments.filter(i => i.type === 'geral');
 
   return (
     <div className="space-y-8">
@@ -228,37 +523,43 @@ const InvestmentsPage = ({
       </div>
 
       {/* Add Form */}
-      <Card>
-        <h3 className="font-bold text-slate-800 mb-4">Novo Investimento / Aplicação</h3>
-        <form onSubmit={handleAdd} className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full">
-            <Input label="Nome" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Ex: Tesouro Selic, CDB..." />
-          </div>
-          <div className="w-full md:w-32">
-             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold uppercase text-slate-500">Tipo</label>
-              <select 
-                value={form.type} 
-                onChange={e => setForm({...form, type: e.target.value as InvestmentType})}
-                className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 w-full outline-none"
-              >
-                <option value="geral">Geral</option>
-                <option value="emergencia">Emergência</option>
-              </select>
+      {currentUser === 'Ambos' ? (
+        <Card className="bg-slate-50 border-dashed border-2 border-slate-200 text-center py-8">
+           <p className="text-slate-500 font-medium">Selecione o perfil de <span className="text-blue-600 font-bold">Thiago</span> ou <span className="text-pink-600 font-bold">Marcela</span> para adicionar investimentos.</p>
+        </Card>
+      ) : (
+        <Card>
+          <h3 className="font-bold text-slate-800 mb-4">Novo Investimento / Aplicação ({currentUser})</h3>
+          <form onSubmit={handleAdd} className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <Input label="Nome" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Ex: Tesouro Selic, CDB..." />
             </div>
-          </div>
-          <div className="w-full md:w-32">
-            <Input label="Valor Inicial" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} placeholder="0,00" />
-          </div>
-          <Button disabled={isLoading} className="w-full md:w-auto">
-             {isLoading ? 'Salvando...' : 'Criar'}
-          </Button>
-        </form>
-      </Card>
+            <div className="w-full md:w-32">
+              <div className="flex flex-col gap-1 w-full">
+                <label className="text-xs font-semibold uppercase text-slate-500">Tipo</label>
+                <select 
+                  value={form.type} 
+                  onChange={e => setForm({...form, type: e.target.value as InvestmentType})}
+                  className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 w-full outline-none"
+                >
+                  <option value="geral">Geral</option>
+                  <option value="emergencia">Emergência</option>
+                </select>
+              </div>
+            </div>
+            <div className="w-full md:w-32">
+              <Input label="Valor Inicial" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} placeholder="0,00" />
+            </div>
+            <Button disabled={isLoading} className="w-full md:w-auto">
+              {isLoading ? 'Salvando...' : 'Criar'}
+            </Button>
+          </form>
+        </Card>
+      )}
 
       {/* List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {investments.map(inv => (
+        {filteredInvestments.map(inv => (
           <Card key={inv.id} className="relative group hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-2">
               <div className={`text-xs px-2 py-1 rounded-full ${inv.type === 'emergencia' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -276,9 +577,9 @@ const InvestmentsPage = ({
             </div>
           </Card>
         ))}
-        {investments.length === 0 && (
+        {filteredInvestments.length === 0 && (
           <div className="col-span-full p-8 text-center text-slate-400">
-             {isLoading ? 'Carregando investimentos...' : 'Nenhum investimento cadastrado.'}
+             {isLoading ? 'Carregando investimentos...' : 'Nenhum investimento cadastrado neste perfil.'}
           </div>
         )}
       </div>
@@ -286,14 +587,17 @@ const InvestmentsPage = ({
   );
 };
 
-// 3. Advisor Page Component
-const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[], investments: Investment[] }) => {
+// 4. Advisor Page
+const AdvisorPage = ({ transactions, investments, currentUser }: { transactions: Transaction[], investments: Investment[], currentUser: User }) => {
   const [advice, setAdvice] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
+  const filteredTransactions = transactions.filter(t => currentUser === 'Ambos' ? true : t.user === currentUser);
+  const filteredInvestments = investments.filter(i => currentUser === 'Ambos' ? true : i.user === currentUser);
+
   const handleConsult = async () => {
     setLoading(true);
-    const result = await getFinancialAdvice(transactions, investments);
+    const result = await getFinancialAdvice(filteredTransactions, filteredInvestments);
     setAdvice(result);
     setLoading(false);
   };
@@ -304,8 +608,8 @@ const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[
         <div className="inline-flex items-center justify-center p-3 bg-purple-100 rounded-full text-purple-600 mb-2">
           <IconBrain className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-800">Consultor Financeiro AI</h2>
-        <p className="text-slate-500">Utilize a inteligência artificial para analisar seus gastos e receber dicas personalizadas para Thiago e Marcela.</p>
+        <h2 className="text-2xl font-bold text-slate-800">Consultor Financeiro AI ({currentUser})</h2>
+        <p className="text-slate-500">Utilize a inteligência artificial para analisar seus gastos e receber dicas personalizadas.</p>
       </div>
 
       <div className="flex justify-center">
@@ -314,12 +618,6 @@ const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[
         </Button>
       </div>
       
-      {!localStorage.getItem('gemini_api_key') && (
-        <div className="text-center text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
-           ⚠️ Você precisa configurar sua chave de API na aba "Configurações" antes de usar.
-        </div>
-      )}
-
       {advice && (
         <Card className="prose prose-slate max-w-none bg-purple-50 border-purple-100">
            <div dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
@@ -329,17 +627,8 @@ const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[
   );
 };
 
-// 4. Settings Page (Updated for Cloud Info & API Key)
+// 5. Settings Page
 const SettingsPage = () => {
-  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
-  const [saved, setSaved] = useState(false);
-
-  const handleSaveKey = () => {
-    localStorage.setItem('gemini_api_key', apiKey);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
-
   const handleLogout = () => {
      localStorage.removeItem('app_authenticated');
      window.location.reload();
@@ -347,35 +636,6 @@ const SettingsPage = () => {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <Card>
-        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <IconSettings className="w-5 h-5" /> Configuração de IA (Gemini)
-        </h3>
-        <p className="text-sm text-slate-600 mb-4">
-          Para usar o Consultor Financeiro, você precisa de uma chave de API gratuita do Google.
-          <br />
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">
-            Clique aqui para gerar sua chave
-          </a>.
-        </p>
-        <div className="flex gap-2">
-          <div className="flex-1">
-             <Input 
-                label="Chave da API (Começa com AIza...)" 
-                type="password"
-                value={apiKey} 
-                onChange={e => setApiKey(e.target.value)} 
-                placeholder="Cole sua chave aqui" 
-             />
-          </div>
-          <div className="flex items-end">
-            <Button onClick={handleSaveKey} variant="primary">
-               {saved ? 'Salvo!' : 'Salvar Chave'}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
       <Card>
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
            Status do Sistema
@@ -388,7 +648,7 @@ const SettingsPage = () => {
            Sincronização Ativa
         </div>
       </Card>
-
+      
       <Card>
         <h3 className="text-lg font-bold text-slate-800 mb-2">Conta</h3>
         <Button onClick={handleLogout} variant="danger" className="w-full">
@@ -399,7 +659,7 @@ const SettingsPage = () => {
   );
 };
 
-// 5. Login Page
+// 6. Login Page (Unchanged)
 const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
    const [password, setPassword] = useState('');
    const [error, setError] = useState(false);
@@ -450,8 +710,15 @@ const App = () => {
 
   // App State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'investments' | 'advisor' | 'settings'>('dashboard');
+  const [currentUser, setCurrentUser] = useState<User>('Ambos'); // New State for Profile Context
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile Menu State
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [customCategories, setCustomCategories] = useState<{id: string, name: string, type: string}[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -468,6 +735,11 @@ const App = () => {
      setIsAuthenticated(true);
   };
 
+  const handleNavClick = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
+
   // Load Data from Supabase
   const fetchData = async () => {
     if (!isAuthenticated) return;
@@ -475,18 +747,26 @@ const App = () => {
     setIsLoading(true);
     setError(null);
     try {
+      // 1. Transactions
       const { data: transData, error: transError } = await supabase
         .from('transactions')
         .select('*')
         .order('date', { ascending: false });
-
       if (transError) throw transError;
 
+      // 2. Investments
       const { data: invData, error: invError } = await supabase
         .from('investments')
         .select('*');
-
       if (invError) throw invError;
+
+      // 3. Custom Categories
+      const { data: catData, error: catError } = await supabase.from('categories').select('*');
+      if (catError && catError.code !== '42P01') console.error(catError); 
+
+      // 4. Budgets
+      const { data: budData, error: budError } = await supabase.from('budgets').select('*');
+      if (budError && budError.code !== '42P01') console.error(budError);
 
       const mappedInvestments = (invData || []).map((i: any) => ({
         id: i.id,
@@ -499,13 +779,16 @@ const App = () => {
 
       setTransactions(transData || []);
       setInvestments(mappedInvestments);
+      if (catData) setCustomCategories(catData);
+      if (budData) setBudgets(budData);
 
     } catch (err: any) {
       console.error("Erro ao carregar dados:", err);
       if (err.message?.includes('Invalid URL')) {
         setError('Configuração do Supabase pendente. Edite o arquivo services/supabase.ts');
       } else {
-        setError('Erro ao conectar ao banco de dados.');
+        // Safe error fallback
+        setError('Erro ao conectar ao banco de dados. Verifique a configuração.');
       }
     } finally {
       setIsLoading(false);
@@ -528,14 +811,14 @@ const App = () => {
           type: t.type,
           category: t.category,
           user: t.user,
-          date: t.date
+          date: t.date,
+          is_recurring: t.is_recurring
         }])
         .select();
 
       if (error) throw error;
       if (data) {
         setTransactions(prev => [...prev, data[0] as Transaction]);
-        fetchData();
       }
     } catch (err) {
       alert("Erro ao salvar transação. Verifique console.");
@@ -560,6 +843,87 @@ const App = () => {
     }
   };
 
+  const addCustomCategory = async (name: string, type: string) => {
+    try {
+      const { data, error } = await supabase.from('categories').insert([{ name, type }]).select();
+      if (error) throw error;
+      if (data) setCustomCategories(prev => [...prev, data[0]]);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao criar categoria.');
+    }
+  };
+
+  const updateBudget = async (category: string, limit: number) => {
+    try {
+      const existing = budgets.find(b => b.category === category);
+      if (existing) {
+         if (limit === 0) {
+            await supabase.from('budgets').delete().eq('id', existing.id);
+            setBudgets(prev => prev.filter(b => b.id !== existing.id));
+         } else {
+            const { error } = await supabase.from('budgets').update({ limit_amount: limit }).eq('id', existing.id);
+            if (error) throw error;
+            setBudgets(prev => prev.map(b => b.id === existing.id ? { ...b, limit_amount: limit } : b));
+         }
+      } else {
+         const { data, error } = await supabase.from('budgets').insert([{ category, limit_amount: limit }]).select();
+         if (error) throw error;
+         if (data) setBudgets(prev => [...prev, data[0]]);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar meta.');
+    }
+  };
+
+  const generateRecurringTransactions = async () => {
+    const prevMonthDate = new Date(currentDate);
+    prevMonthDate.setMonth(currentDate.getMonth() - 1);
+
+    const prevMonthTransactions = transactions.filter(t => {
+       const tDate = new Date(t.date);
+       return tDate.getMonth() === prevMonthDate.getMonth() && 
+              tDate.getFullYear() === prevMonthDate.getFullYear() &&
+              t.is_recurring &&
+              (currentUser === 'Ambos' ? true : t.user === currentUser); // Check recurrence for current user view
+    });
+
+    if (prevMonthTransactions.length === 0) {
+       alert('Nenhuma transação recorrente encontrada no mês anterior para este perfil.');
+       return;
+    }
+
+    let count = 0;
+    for (const t of prevMonthTransactions) {
+       const exists = transactions.some(curr => 
+          curr.description === t.description && 
+          curr.amount === t.amount &&
+          new Date(curr.date).getMonth() === currentDate.getMonth()
+       );
+
+       if (!exists) {
+          const newDate = new Date(t.date);
+          newDate.setMonth(currentDate.getMonth());
+          newDate.setFullYear(currentDate.getFullYear());
+          
+          await addTransaction({
+             description: t.description,
+             amount: t.amount,
+             type: t.type,
+             category: t.category,
+             user: t.user,
+             date: newDate.toISOString().split('T')[0],
+             is_recurring: true
+          });
+          count++;
+       }
+    }
+    
+    if (count > 0) alert(`${count} transações recorrentes geradas para este mês!`);
+    else alert('Todas as transações recorrentes já foram lançadas neste mês.');
+  };
+
   const addInvestment = async (inv: Omit<Investment, 'id' | 'history'>, initialAmount: number) => {
     setIsLoading(true);
     try {
@@ -567,7 +931,7 @@ const App = () => {
         id: crypto.randomUUID(),
         date: new Date().toISOString(),
         amount: initialAmount,
-        type: 'aporte'
+        type: 'aporte' as const
       };
 
       const { data, error } = await supabase
@@ -618,11 +982,14 @@ const App = () => {
   };
 
   const stats = useMemo(() => {
-    const income = transactions.filter(t => t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
-    const expenses = transactions.filter(t => t.type === 'despesa').reduce((acc, t) => acc + t.amount, 0);
-    const invested = investments.reduce((acc, i) => acc + i.currentAmount, 0);
+    const filteredTransactions = transactions.filter(t => currentUser === 'Ambos' ? true : t.user === currentUser);
+    const filteredInvestments = investments.filter(i => currentUser === 'Ambos' ? true : i.user === currentUser);
+
+    const income = filteredTransactions.filter(t => t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
+    const expenses = filteredTransactions.filter(t => t.type === 'despesa').reduce((acc, t) => acc + t.amount, 0);
+    const invested = filteredInvestments.reduce((acc, i) => acc + i.currentAmount, 0);
     return { income, expenses, balance: income - expenses, invested };
-  }, [transactions, investments]);
+  }, [transactions, investments, currentUser]);
 
   // Render Helpers
   const renderContent = () => {
@@ -638,71 +1005,43 @@ const App = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="border-l-4 border-l-emerald-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">Saldo Atual</p>
-                    <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(stats.balance)}</h3>
-                  </div>
-                  <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
-                     <IconWallet />
-                  </div>
-                </div>
-              </Card>
-              <Card className="border-l-4 border-l-blue-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">Receitas</p>
-                    <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(stats.income)}</h3>
-                  </div>
-                  <div className="p-2 bg-blue-100 rounded-full text-blue-600">
-                     <IconTrendingUp />
-                  </div>
-                </div>
-              </Card>
-              <Card className="border-l-4 border-l-rose-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">Despesas</p>
-                    <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(stats.expenses)}</h3>
-                  </div>
-                  <div className="p-2 bg-rose-100 rounded-full text-rose-600">
-                     <IconTrendingDown />
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <h3 className="text-lg font-bold text-slate-800 mb-4">Fluxo Mensal</h3>
-                <MonthlyChart transactions={transactions} />
-              </Card>
-              <Card>
-                <h3 className="text-lg font-bold text-slate-800 mb-4">Gastos por Categoria</h3>
-                <CategoryChart transactions={transactions} />
-              </Card>
-            </div>
-            
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg">
-               <div>
-                  <h3 className="text-xl font-bold">Total Investido</h3>
-                  <p className="opacity-80">Inclui Reserva de Emergência e Investimentos</p>
-               </div>
-               <div className="text-3xl font-bold text-emerald-400">
-                 {formatCurrency(stats.invested)}
-               </div>
-            </div>
-          </div>
+           <DashboardPage 
+              transactions={transactions} 
+              stats={stats} 
+              budgets={budgets}
+              onUpdateBudget={updateBudget}
+              currentDate={currentDate}
+              onMonthChange={setCurrentDate}
+              currentUser={currentUser}
+           />
         );
       case 'transactions':
-        return <TransactionsPage transactions={transactions} onAdd={addTransaction} onDelete={deleteTransaction} isLoading={isLoading} />;
+        return (
+           <TransactionsPage 
+              transactions={transactions} 
+              onAdd={addTransaction} 
+              onDelete={deleteTransaction} 
+              isLoading={isLoading} 
+              customCategories={customCategories}
+              onAddCategory={addCustomCategory}
+              currentDate={currentDate}
+              onMonthChange={setCurrentDate}
+              onGenerateRecurring={generateRecurringTransactions}
+              currentUser={currentUser}
+           />
+        );
       case 'investments':
-        return <InvestmentsPage investments={investments} onAdd={addInvestment} onDelete={deleteInvestment} isLoading={isLoading} />;
+        return (
+          <InvestmentsPage 
+            investments={investments} 
+            onAdd={addInvestment} 
+            onDelete={deleteInvestment} 
+            isLoading={isLoading} 
+            currentUser={currentUser}
+          />
+        );
       case 'advisor':
-        return <AdvisorPage transactions={transactions} investments={investments} />;
+        return <AdvisorPage transactions={transactions} investments={investments} currentUser={currentUser} />;
       case 'settings':
         return <SettingsPage />;
       default:
@@ -716,38 +1055,62 @@ const App = () => {
      return <LoginPage onLogin={handleLogin} />;
   }
 
+  // Dynamic Background based on selected User
+  const getMainBackground = () => {
+    if (currentUser === 'Thiago') return 'bg-blue-50/50';
+    if (currentUser === 'Marcela') return 'bg-pink-50/50';
+    return 'bg-slate-50';
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
+    <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-500 ${getMainBackground()}`}>
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-white border-r border-slate-200 flex-shrink-0 sticky top-0 md:h-screen z-10 overflow-y-auto">
-        <div className="p-6 border-b border-slate-100">
-          <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            DuoFin
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Thiago & Marcela</p>
+      <aside className={`
+        bg-white border-r border-slate-200 flex-shrink-0 z-50
+        md:w-64 md:h-screen md:sticky md:top-0 
+        w-full fixed top-0 left-0 shadow-sm md:shadow-none
+        ${mobileMenuOpen ? 'h-screen' : 'h-auto'}
+      `}>
+        <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              DuoFin
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Thiago & Marcela</p>
+          </div>
+          <button 
+             className="md:hidden text-slate-600 p-2" 
+             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+             {mobileMenuOpen ? <IconClose /> : <IconMenu />}
+          </button>
         </div>
-        <nav className="p-4 space-y-2">
+        
+        <nav className={`
+            p-4 space-y-2 bg-white
+            ${mobileMenuOpen ? 'block' : 'hidden'} md:block
+        `}>
           <NavButton 
             active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')} 
+            onClick={() => handleNavClick('dashboard')} 
             icon={<IconPieChart />} 
             label="Visão Geral" 
           />
           <NavButton 
             active={activeTab === 'transactions'} 
-            onClick={() => setActiveTab('transactions')} 
+            onClick={() => handleNavClick('transactions')} 
             icon={<IconList />} 
             label="Transações" 
           />
           <NavButton 
             active={activeTab === 'investments'} 
-            onClick={() => setActiveTab('investments')} 
+            onClick={() => handleNavClick('investments')} 
             icon={<IconTrendingUp />} 
             label="Investimentos" 
           />
           <NavButton 
             active={activeTab === 'advisor'} 
-            onClick={() => setActiveTab('advisor')} 
+            onClick={() => handleNavClick('advisor')} 
             icon={<IconBrain />} 
             label="Consultor AI" 
             special
@@ -755,7 +1118,7 @@ const App = () => {
           <div className="pt-4 mt-4 border-t border-slate-100">
             <NavButton 
               active={activeTab === 'settings'} 
-              onClick={() => setActiveTab('settings')} 
+              onClick={() => handleNavClick('settings')} 
               icon={<IconSettings />} 
               label="Configurações" 
             />
@@ -764,17 +1127,36 @@ const App = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-        <header className="mb-8 flex justify-between items-center">
+      <main className="flex-1 p-4 md:p-8 pt-24 md:pt-8 overflow-y-auto">
+        <header className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-800 capitalize">
               {activeTab === 'advisor' ? 'Consultor AI' : activeTab === 'dashboard' ? 'Painel de Controle' : activeTab === 'settings' ? 'Configurações' : activeTab}
             </h2>
-            <p className="text-slate-500 text-sm">Controle financeiro na Nuvem.</p>
+            <p className="text-slate-500 text-sm">
+               Visualizando dados de: <strong className="text-slate-700">{currentUser === 'Ambos' ? 'Geral (Thiago + Marcela)' : currentUser}</strong>
+            </p>
           </div>
-          <div className="hidden md:flex gap-2">
-             <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">Thiago</div>
-             <div className="px-3 py-1 bg-pink-100 text-pink-700 rounded-full text-xs font-bold">Marcela</div>
+          
+          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+             <button 
+               onClick={() => setCurrentUser('Ambos')}
+               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Ambos' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+             >
+                Geral
+             </button>
+             <button 
+               onClick={() => setCurrentUser('Thiago')}
+               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Thiago' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-blue-50'}`}
+             >
+                Thiago
+             </button>
+             <button 
+               onClick={() => setCurrentUser('Marcela')}
+               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Marcela' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-500 hover:bg-pink-50'}`}
+             >
+                Marcela
+             </button>
           </div>
         </header>
         {renderContent()}
@@ -793,7 +1175,7 @@ const NavButton = ({
 }: { 
   active: boolean; 
   onClick: () => void; 
-  icon: React.ReactElement<{ className?: string }>; 
+  icon: React.ReactElement; 
   label: string;
   special?: boolean;
 }) => (
@@ -805,7 +1187,7 @@ const NavButton = ({
         : special ? 'text-purple-600 hover:bg-purple-50' : 'text-slate-500 hover:bg-slate-100'
     }`}
   >
-    {React.cloneElement(icon, { className: "w-5 h-5" })}
+    {React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" })}
     {label}
   </button>
 );

@@ -1,7 +1,7 @@
 import React from 'react';
+import { IconClose } from './Icons';
 
 // Utility for formatting currency to Brazilian Real (pt-BR)
-// Ex: 10000.30 -> R$ 10.000,30
 export const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -60,12 +60,12 @@ export const Select = ({
   onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; 
   options: string[] 
 }) => (
-  <div className="flex flex-col gap-1">
+  <div className="flex flex-col gap-1 w-full">
     <label className="text-xs font-semibold uppercase text-slate-500">{label}</label>
     <select 
       value={value} 
       onChange={onChange}
-      className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+      className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
     >
       {options.map(opt => (
         <option key={opt} value={opt} className="text-slate-800">{opt}</option>
@@ -87,14 +87,73 @@ export const Input = ({
   type?: string;
   placeholder?: string;
 }) => (
-  <div className="flex flex-col gap-1">
+  <div className="flex flex-col gap-1 w-full">
     <label className="text-xs font-semibold uppercase text-slate-500">{label}</label>
     <input 
       type={type} 
       value={value} 
       onChange={onChange}
       placeholder={placeholder}
-      className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none"
+      className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none w-full"
     />
   </div>
 );
+
+export const Modal = ({
+  isOpen,
+  onClose,
+  title,
+  children
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div className="flex justify-between items-center p-4 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-800">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <IconClose className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const ProgressBar = ({ 
+  current, 
+  max, 
+  label 
+}: { 
+  current: number; 
+  max: number; 
+  label: string;
+}) => {
+  const percentage = Math.min(100, Math.max(0, (current / max) * 100));
+  const isOver = current > max;
+  
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between text-sm mb-1">
+        <span className="font-medium text-slate-700">{label}</span>
+        <span className={`font-bold ${isOver ? 'text-red-600' : 'text-slate-600'}`}>
+          {formatCurrency(current)} / {formatCurrency(max)}
+        </span>
+      </div>
+      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+        <div 
+          className={`h-full rounded-full transition-all duration-500 ${isOver ? 'bg-red-500' : percentage > 80 ? 'bg-orange-400' : 'bg-blue-500'}`}
+          style={{ width: `${percentage}%` }}
+        ></div>
+      </div>
+    </div>
+  );
+};

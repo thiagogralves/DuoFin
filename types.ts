@@ -12,6 +12,7 @@ export interface Transaction {
   category: string;
   user: User;
   date: string; // ISO Date string YYYY-MM-DD
+  is_recurring?: boolean;
 }
 
 export interface InvestmentOperation {
@@ -29,6 +30,12 @@ export interface Investment {
   goal?: number;
   user: User; // Who primarily manages it, or 'Ambos'
   history: InvestmentOperation[];
+}
+
+export interface Budget {
+  id: string;
+  category: string;
+  limit_amount: number;
 }
 
 export interface DashboardStats {
