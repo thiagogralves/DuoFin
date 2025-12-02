@@ -1,5 +1,7 @@
 export const USERS = ['Thiago', 'Marcela', 'Ambos'];
 
+export const APP_PASSWORD = '6883';
+
 export const CATEGORIES = {
   INCOME: [
     'Salário',

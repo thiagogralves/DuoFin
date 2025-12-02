@@ -6,7 +6,7 @@ import {
 import { Card, Button, Input, Select, formatCurrency } from './components/UI';
 import { MonthlyChart, CategoryChart } from './components/Charts';
 import { Transaction, Investment, User, InvestmentType, TransactionType } from './types';
-import { USERS, CATEGORIES } from './constants';
+import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
 import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
 
@@ -286,7 +286,7 @@ const InvestmentsPage = ({
   );
 };
 
-// 3. Advisor Page Component (Unchanged mostly)
+// 3. Advisor Page Component
 const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[], investments: Investment[] }) => {
   const [advice, setAdvice] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -313,6 +313,12 @@ const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[
           {loading ? 'Analisando...' : 'Gerar Análise Financeira'}
         </Button>
       </div>
+      
+      {!localStorage.getItem('gemini_api_key') && (
+        <div className="text-center text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
+           ⚠️ Você precisa configurar sua chave de API na aba "Configurações" antes de usar.
+        </div>
+      )}
 
       {advice && (
         <Card className="prose prose-slate max-w-none bg-purple-50 border-purple-100">
@@ -323,13 +329,56 @@ const AdvisorPage = ({ transactions, investments }: { transactions: Transaction[
   );
 };
 
-// 4. Settings Page (Updated for Cloud Info)
+// 4. Settings Page (Updated for Cloud Info & API Key)
 const SettingsPage = () => {
+  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
+  const [saved, setSaved] = useState(false);
+
+  const handleSaveKey = () => {
+    localStorage.setItem('gemini_api_key', apiKey);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleLogout = () => {
+     localStorage.removeItem('app_authenticated');
+     window.location.reload();
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <Card>
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <IconSettings className="w-5 h-5" /> Status do Sistema
+          <IconSettings className="w-5 h-5" /> Configuração de IA (Gemini)
+        </h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Para usar o Consultor Financeiro, você precisa de uma chave de API gratuita do Google.
+          <br />
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">
+            Clique aqui para gerar sua chave
+          </a>.
+        </p>
+        <div className="flex gap-2">
+          <div className="flex-1">
+             <Input 
+                label="Chave da API (Começa com AIza...)" 
+                type="password"
+                value={apiKey} 
+                onChange={e => setApiKey(e.target.value)} 
+                placeholder="Cole sua chave aqui" 
+             />
+          </div>
+          <div className="flex items-end">
+            <Button onClick={handleSaveKey} variant="primary">
+               {saved ? 'Salvo!' : 'Salvar Chave'}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+           Status do Sistema
         </h3>
         <p className="text-sm text-slate-600 mb-4">
           Este aplicativo está conectado à nuvem (Supabase). Seus dados estão sincronizados automaticamente.
@@ -341,33 +390,91 @@ const SettingsPage = () => {
       </Card>
 
       <Card>
-        <h3 className="text-lg font-bold text-slate-800 mb-2">Sobre o App</h3>
-        <p className="text-sm text-slate-500">
-          DuoFin v2.0 - Controle Financeiro para Thiago & Marcela.
-          <br/>
-          Hospedado na Vercel + Banco de Dados Supabase.
-        </p>
+        <h3 className="text-lg font-bold text-slate-800 mb-2">Conta</h3>
+        <Button onClick={handleLogout} variant="danger" className="w-full">
+           Sair do Aplicativo
+        </Button>
       </Card>
     </div>
   );
 };
 
+// 5. Login Page
+const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
+   const [password, setPassword] = useState('');
+   const [error, setError] = useState(false);
+
+   const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (password === APP_PASSWORD) {
+         onLogin();
+      } else {
+         setError(true);
+      }
+   };
+
+   return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+         <Card className="w-full max-w-md">
+            <div className="text-center mb-6">
+               <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  DuoFin
+               </h1>
+               <p className="text-slate-500">Thiago & Marcela</p>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Senha de Acesso</label>
+                  <input 
+                     type="password" 
+                     className="w-full border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                     value={password}
+                     onChange={e => { setPassword(e.target.value); setError(false); }}
+                     placeholder="Digite a senha..."
+                     autoFocus
+                  />
+               </div>
+               {error && <p className="text-red-500 text-sm">Senha incorreta.</p>}
+               <Button className="w-full py-3" onClick={() => {}}>Entrar</Button>
+            </form>
+         </Card>
+      </div>
+   );
+};
+
 // --- Main App Component ---
 
 const App = () => {
-  // State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // App State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'investments' | 'advisor' | 'settings'>('dashboard');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+     const auth = localStorage.getItem('app_authenticated');
+     if (auth === 'true') {
+        setIsAuthenticated(true);
+     }
+     setCheckingAuth(false);
+  }, []);
+
+  const handleLogin = () => {
+     localStorage.setItem('app_authenticated', 'true');
+     setIsAuthenticated(true);
+  };
+
   // Load Data from Supabase
   const fetchData = async () => {
+    if (!isAuthenticated) return;
+
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch Transactions
       const { data: transData, error: transError } = await supabase
         .from('transactions')
         .select('*')
@@ -375,17 +482,12 @@ const App = () => {
 
       if (transError) throw transError;
 
-      // Fetch Investments
       const { data: invData, error: invError } = await supabase
         .from('investments')
         .select('*');
 
       if (invError) throw invError;
 
-      // Transform Investments (Handling camelCase mapping if needed, assuming DB snake_case for consistency but JS object property access works if we insert carefully or map it)
-      // Supabase returns columns as they are in DB. Let's assume user followed SQL which used snake_case for some fields if not quoted, 
-      // but my SQL used simple names. `current_amount` in DB vs `currentAmount` in types.
-      
       const mappedInvestments = (invData || []).map((i: any) => ({
         id: i.id,
         name: i.name,
@@ -400,7 +502,6 @@ const App = () => {
 
     } catch (err: any) {
       console.error("Erro ao carregar dados:", err);
-      // Don't show alert loop, just log
       if (err.message?.includes('Invalid URL')) {
         setError('Configuração do Supabase pendente. Edite o arquivo services/supabase.ts');
       } else {
@@ -413,7 +514,7 @@ const App = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [isAuthenticated]);
 
   // Actions
   const addTransaction = async (t: Omit<Transaction, 'id'>) => {
@@ -434,7 +535,6 @@ const App = () => {
       if (error) throw error;
       if (data) {
         setTransactions(prev => [...prev, data[0] as Transaction]);
-        // Re-fetch to guarantee sort order or just unshift
         fetchData();
       }
     } catch (err) {
@@ -476,8 +576,8 @@ const App = () => {
           name: inv.name,
           type: inv.type,
           user: inv.user,
-          current_amount: initialAmount, // DB column name
-          history: [historyItem] // JSONB column
+          current_amount: initialAmount,
+          history: [historyItem]
         }])
         .select();
 
@@ -517,7 +617,6 @@ const App = () => {
     }
   };
 
-  // Derived Stats
   const stats = useMemo(() => {
     const income = transactions.filter(t => t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
     const expenses = transactions.filter(t => t.type === 'despesa').reduce((acc, t) => acc + t.amount, 0);
@@ -525,7 +624,7 @@ const App = () => {
     return { income, expenses, balance: income - expenses, invested };
   }, [transactions, investments]);
 
-  // Navigation Logic
+  // Render Helpers
   const renderContent = () => {
     if (error) {
       return (
@@ -611,6 +710,12 @@ const App = () => {
     }
   };
 
+  if (checkingAuth) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Carregando...</div>;
+
+  if (!isAuthenticated) {
+     return <LoginPage onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
       {/* Sidebar Navigation */}
@@ -688,7 +793,7 @@ const NavButton = ({
 }: { 
   active: boolean; 
   onClick: () => void; 
-  icon: React.ReactNode; 
+  icon: React.ReactElement<{ className?: string }>; 
   label: string;
   special?: boolean;
 }) => (
@@ -700,7 +805,7 @@ const NavButton = ({
         : special ? 'text-purple-600 hover:bg-purple-50' : 'text-slate-500 hover:bg-slate-100'
     }`}
   >
-    {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+    {React.cloneElement(icon, { className: "w-5 h-5" })}
     {label}
   </button>
 );

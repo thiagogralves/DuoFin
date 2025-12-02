@@ -6,7 +6,13 @@ export const getFinancialAdvice = async (
   investments: Investment[]
 ): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = localStorage.getItem('gemini_api_key');
+    
+    if (!apiKey) {
+      return "⚠️ Chave de API não configurada. Vá em 'Configurações' e adicione sua chave do Google Gemini.";
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
     // Prepare data summary for the AI
     const income = transactions.filter(t => t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
@@ -49,6 +55,6 @@ export const getFinancialAdvice = async (
     return response.text || "Não foi possível gerar conselhos no momento.";
   } catch (error) {
     console.error("Erro ao consultar Gemini:", error);
-    return "Desculpe, ocorreu um erro ao tentar analisar suas finanças. Verifique sua chave de API.";
+    return "Desculpe, ocorreu um erro ao tentar analisar suas finanças. Verifique se sua chave de API está correta.";
   }
 };
