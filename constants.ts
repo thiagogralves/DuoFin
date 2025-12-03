@@ -28,13 +28,13 @@ export const CATEGORIES = {
     'Energia Elétrica',
     'Impostos',
     'Internet/TV',
-    'Lazer/Restaurantes',
+    'Lazer',
     'Mercado',
     'Pets',
     'Presentes',
     'Roupas/Acessórios',
     'Saúde/Farmácia',
-    'Transporte/Combustível',
+    'Transporte',
     'Viagem',
     'Outros'
   ]
