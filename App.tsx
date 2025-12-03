@@ -5,7 +5,7 @@ import {
 } from './components/Icons';
 import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
 import { MonthlyChart, CategoryChart } from './components/Charts';
-import { Transaction, Investment, User, InvestmentType, TransactionType, Budget } from './types';
+import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category } from './types';
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
 import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
@@ -24,8 +24,7 @@ const TransactionsPage = ({
   onUpdate,
   onDelete,
   isLoading,
-  customCategories,
-  onAddCategory,
+  categories,
   currentDate,
   onMonthChange,
   onGenerateRecurring,
@@ -36,8 +35,7 @@ const TransactionsPage = ({
   onUpdate: (id: string, t: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   isLoading: boolean;
-  customCategories: { id: string, name: string, type: string }[];
-  onAddCategory: (name: string, type: string) => void;
+  categories: Category[];
   currentDate: Date;
   onMonthChange: (d: Date) => void;
   onGenerateRecurring: () => void;
@@ -52,17 +50,17 @@ const TransactionsPage = ({
     is_recurring: false,
     recurring_months: ''
   });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newCatName, setNewCatName] = useState('');
   
   // Edit State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  // Initial Category Setup
+  // Set default category when type changes or categories load
   useEffect(() => {
-    const defaultCat = form.type === 'receita' ? CATEGORIES.INCOME[0] : CATEGORIES.EXPENSE[0];
-    if (!form.category) setForm(f => ({ ...f, category: defaultCat }));
-  }, [form.type]);
+    const catsOfType = categories.filter(c => c.type === form.type).map(c => c.name).sort();
+    if (catsOfType.length > 0 && (!form.category || !catsOfType.includes(form.category))) {
+       setForm(f => ({ ...f, category: catsOfType[0] }));
+    }
+  }, [form.type, categories]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,37 +92,25 @@ const TransactionsPage = ({
      }
   };
 
-  const handleCreateCategory = () => {
-    if (newCatName) {
-      onAddCategory(newCatName, form.type);
-      setForm({ ...form, category: newCatName });
-      setIsModalOpen(false);
-      setNewCatName('');
-    }
-  };
-
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newType = e.target.value as TransactionType;
-    setForm({
-      ...form,
-      type: newType,
-      category: newType === 'receita' ? CATEGORIES.INCOME[0] : CATEGORIES.EXPENSE[0]
-    });
+    setForm({ ...form, type: newType });
   };
 
   const availableCategories = useMemo(() => {
-    const defaultCats = form.type === 'receita' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE;
-    const customCats = customCategories.filter(c => c.type === form.type).map(c => c.name);
-    return [...defaultCats, ...customCats].sort();
-  }, [form.type, customCategories]);
+    return categories
+       .filter(c => c.type === form.type)
+       .map(c => c.name)
+       .sort();
+  }, [form.type, categories]);
   
-  // Categories for editing might depend on the transaction type being edited
   const editAvailableCategories = useMemo(() => {
      if (!editingTransaction) return [];
-     const defaultCats = editingTransaction.type === 'receita' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE;
-     const customCats = customCategories.filter(c => c.type === editingTransaction.type).map(c => c.name);
-     return [...defaultCats, ...customCats].sort();
-  }, [editingTransaction, customCategories]);
+     return categories
+       .filter(c => c.type === editingTransaction.type)
+       .map(c => c.name)
+       .sort();
+  }, [editingTransaction, categories]);
 
   // Filter Transactions by Selected Month AND Current User
   const filteredTransactions = transactions.filter(t => {
@@ -209,14 +195,6 @@ const TransactionsPage = ({
                   options={availableCategories}
                 />
               </div>
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-slate-200 text-slate-700 p-2.5 rounded-lg hover:bg-slate-300 transition-colors mb-[1px]"
-                title="Nova Categoria"
-              >
-                <IconPlus className="w-5 h-5" />
-              </button>
             </div>
             
             <div className="lg:col-span-1 flex flex-col pt-1">
@@ -231,7 +209,7 @@ const TransactionsPage = ({
               </label>
               {form.is_recurring && (
                  <Input 
-                    label="Meses" 
+                    label="Por quantos meses?" 
                     type="number" 
                     placeholder="Ex: 12" 
                     value={form.recurring_months} 
@@ -306,19 +284,6 @@ const TransactionsPage = ({
           </table>
         </div>
       </div>
-
-      {/* New Category Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova Categoria">
-         <div className="space-y-4">
-            <Input 
-              label="Nome da Categoria" 
-              value={newCatName} 
-              onChange={e => setNewCatName(e.target.value)}
-              placeholder="Ex: Natação, Reforma..."
-            />
-            <Button onClick={handleCreateCategory} className="w-full">Criar</Button>
-         </div>
-      </Modal>
 
       {/* Edit Transaction Modal */}
       <Modal isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Editar Transação">
@@ -539,7 +504,7 @@ const DashboardPage = ({
   );
 };
 
-// 3. Investments Page
+// 3. Investments Page (Unchanged)
 const InvestmentsPage = ({ 
   investments, 
   onAdd, 
@@ -710,15 +675,50 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
   );
 };
 
-// 5. Settings Page
-const SettingsPage = () => {
+// 5. Settings Page (Unifying Categories)
+const SettingsPage = ({
+  categories,
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory,
+  onRestoreDefaults
+}: {
+  categories: Category[];
+  onAddCategory: (name: string, type: string) => void;
+  onUpdateCategory: (id: string, oldName: string, newName: string) => void;
+  onDeleteCategory: (id: string, name: string) => void;
+  onRestoreDefaults: () => void;
+}) => {
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatType, setNewCatType] = useState('despesa');
+  const [viewType, setViewType] = useState<'receita' | 'despesa'>('despesa');
+  
+  // Edit State
+  const [editingCat, setEditingCat] = useState<{id: string, name: string, oldName: string} | null>(null);
+
+  const handleCreate = () => {
+    if (newCatName) {
+      onAddCategory(newCatName, newCatType);
+      setNewCatName('');
+    }
+  };
+  
+  const handleUpdateSubmit = () => {
+     if (editingCat && editingCat.name.trim() !== '') {
+        onUpdateCategory(editingCat.id, editingCat.oldName, editingCat.name);
+        setEditingCat(null);
+     }
+  };
+
   const handleLogout = () => {
      localStorage.removeItem('app_authenticated');
      window.location.reload();
   };
+  
+  const displayedCategories = categories.filter(c => c.type === viewType).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       <Card>
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
            Status do Sistema
@@ -732,6 +732,104 @@ const SettingsPage = () => {
         </div>
       </Card>
       
+      <Card>
+         <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-800">Gerenciar Categorias</h3>
+            <button 
+               onClick={onRestoreDefaults}
+               className="text-xs text-blue-600 hover:text-blue-800 underline"
+            >
+               Restaurar Categorias Padrão
+            </button>
+         </div>
+         
+         {/* Add New */}
+         <div className="bg-slate-50 p-4 rounded-lg mb-8 border border-slate-100">
+             <h4 className="text-sm font-semibold text-slate-700 mb-2">Adicionar Nova Categoria</h4>
+             <div className="flex flex-col md:flex-row gap-2">
+                <input 
+                  type="text" 
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  placeholder="Nome da categoria..."
+                  className="flex-1 border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <select 
+                  value={newCatType}
+                  onChange={e => setNewCatType(e.target.value)}
+                  className="border border-slate-300 rounded-lg p-2 text-sm outline-none bg-white"
+                >
+                  <option value="despesa">Despesa</option>
+                  <option value="receita">Receita</option>
+                </select>
+                <Button onClick={handleCreate} disabled={!newCatName} className="py-2 text-sm">Adicionar</Button>
+             </div>
+         </div>
+
+         {/* Filters */}
+         <div className="flex gap-2 mb-4">
+             <button 
+                onClick={() => setViewType('despesa')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${viewType === 'despesa' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+             >
+                Despesas
+             </button>
+             <button 
+                onClick={() => setViewType('receita')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${viewType === 'receita' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+             >
+                Receitas
+             </button>
+         </div>
+
+         <div className="space-y-2">
+             {displayedCategories.map(c => (
+                <div key={c.id} className="flex justify-between items-center bg-white border border-slate-100 p-3 rounded-lg hover:shadow-sm transition-shadow group">
+                   <div className="flex items-center gap-3">
+                      {c.is_system && <span title="Categoria do Sistema"><IconShield className="w-4 h-4 text-slate-300" /></span>}
+                      <span className="text-slate-800 font-medium">{c.name}</span>
+                   </div>
+                   <div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                         onClick={() => setEditingCat({id: c.id, name: c.name, oldName: c.name})}
+                         className="text-slate-400 hover:text-blue-500 p-1 rounded hover:bg-blue-50"
+                         title="Renomear"
+                      >
+                         <IconEdit className="w-4 h-4" />
+                      </button>
+                      {!c.is_system && (
+                         <button 
+                            onClick={() => onDeleteCategory(c.id, c.name)}
+                            className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-red-50"
+                            title="Excluir"
+                         >
+                            <IconTrash className="w-4 h-4" />
+                         </button>
+                      )}
+                   </div>
+                </div>
+             ))}
+             {displayedCategories.length === 0 && (
+                <p className="text-center text-slate-400 italic py-4">Nenhuma categoria encontrada.</p>
+             )}
+         </div>
+      </Card>
+      
+      {/* Edit Category Modal */}
+      <Modal isOpen={!!editingCat} onClose={() => setEditingCat(null)} title="Renomear Categoria">
+         <div className="space-y-4">
+             <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded text-sm">
+                <p><strong>Atenção:</strong> Ao renomear, todas as transações passadas que usam "<strong>{editingCat?.oldName}</strong>" serão atualizadas para o novo nome.</p>
+             </div>
+             <Input 
+                label="Novo Nome"
+                value={editingCat?.name || ''}
+                onChange={e => setEditingCat(prev => prev ? {...prev, name: e.target.value} : null)}
+             />
+             <Button onClick={handleUpdateSubmit} className="w-full">Salvar Alterações</Button>
+         </div>
+      </Modal>
+
       <Card>
          <h3 className="text-lg font-bold text-slate-800 mb-4">Conta</h3>
          <Button onClick={handleLogout} variant="danger" className="w-full">
@@ -798,7 +896,7 @@ const App = () => {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
-  const [customCategories, setCustomCategories] = useState<{id: string, name: string, type: string}[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]); // Unified Categories
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -843,9 +941,39 @@ const App = () => {
         .select('*');
       if (invError) throw invError;
 
-      // 3. Custom Categories
+      // 3. Categories (Unified)
       const { data: catData, error: catError } = await supabase.from('categories').select('*');
       if (catError && catError.code !== '42P01') console.error(catError); 
+
+      // 3.1 Migration Logic: Force Sync defaults
+      // Check which defaults are missing from the DB
+      const existingNames = (catData || []).map((c: any) => c.name);
+      const missingDefaults: any[] = [];
+      
+      CATEGORIES.INCOME.forEach(name => {
+         if (!existingNames.includes(name)) missingDefaults.push({ name, type: 'receita', is_system: true });
+      });
+      
+      CATEGORIES.EXPENSE.forEach(name => {
+         if (!existingNames.includes(name)) missingDefaults.push({ name, type: 'despesa', is_system: true });
+      });
+      
+      let finalCategories = catData || [];
+
+      if (missingDefaults.length > 0) {
+         console.log("Sincronizando categorias faltantes...", missingDefaults);
+         const { data: insertedData, error: insertError } = await supabase
+            .from('categories')
+            .insert(missingDefaults)
+            .select();
+            
+         if (insertError) console.error("Erro na migração:", insertError);
+         if (insertedData) {
+            finalCategories = [...finalCategories, ...insertedData];
+         }
+      }
+      
+      setCategories(finalCategories);
 
       // 4. Budgets
       const { data: budData, error: budError } = await supabase.from('budgets').select('*');
@@ -862,7 +990,6 @@ const App = () => {
 
       setTransactions(transData || []);
       setInvestments(mappedInvestments);
-      if (catData) setCustomCategories(catData);
       if (budData) setBudgets(budData);
 
     } catch (err: any) {
@@ -964,14 +1091,96 @@ const App = () => {
     }
   };
 
-  const addCustomCategory = async (name: string, type: string) => {
+  // Category Actions
+  const addCategory = async (name: string, type: string) => {
     try {
-      const { data, error } = await supabase.from('categories').insert([{ name, type }]).select();
+      const { data, error } = await supabase.from('categories').insert([{ name, type, is_system: false }]).select();
       if (error) throw error;
-      if (data) setCustomCategories(prev => [...prev, data[0]]);
+      if (data) setCategories(prev => [...prev, data[0]]);
     } catch (err) {
       console.error(err);
       alert('Erro ao criar categoria.');
+    }
+  };
+  
+  const updateCategory = async (id: string, oldName: string, newName: string) => {
+     try {
+        // 1. Update Category Name
+        const { error: catError } = await supabase
+           .from('categories')
+           .update({ name: newName })
+           .eq('id', id);
+           
+        if (catError) throw catError;
+        
+        // 2. Cascade Update Transactions
+        const { error: transError } = await supabase
+           .from('transactions')
+           .update({ category: newName })
+           .eq('category', oldName);
+           
+        if (transError) console.error("Erro ao atualizar transações antigas:", transError);
+        
+        // 3. Update Local State
+        setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
+        setTransactions(prev => prev.map(t => t.category === oldName ? { ...t, category: newName } : t));
+        
+     } catch (err) {
+        console.error(err);
+        alert('Erro ao renomear categoria.');
+     }
+  };
+
+  const deleteCategory = async (id: string, name: string) => {
+    // Check usage
+    const isUsed = transactions.some(t => t.category === name);
+    if (isUsed) {
+       alert(`Não é possível excluir a categoria "${name}" pois ela é usada em transações.`);
+       return;
+    }
+    
+    if (!confirm('Excluir esta categoria?')) return;
+    try {
+      const { error } = await supabase.from('categories').delete().eq('id', id);
+      if (error) throw error;
+      setCategories(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir categoria.');
+    }
+  };
+
+  const restoreDefaults = async () => {
+    if (!confirm('Isso adicionará as categorias padrão (Aluguel, Mercado, etc) se elas não existirem. Deseja continuar?')) return;
+    
+    setIsLoading(true);
+    try {
+       const existingNames = categories.map(c => c.name);
+       const toInsert = [];
+       
+       CATEGORIES.INCOME.forEach(name => {
+          if (!existingNames.includes(name)) toInsert.push({ name, type: 'receita', is_system: true });
+       });
+       
+       CATEGORIES.EXPENSE.forEach(name => {
+          if (!existingNames.includes(name)) toInsert.push({ name, type: 'despesa', is_system: true });
+       });
+       
+       if (toInsert.length > 0) {
+          const { data, error } = await supabase.from('categories').insert(toInsert).select();
+          if (error) throw error;
+          if (data) {
+             setCategories(prev => [...prev, ...data]);
+             alert(`${data.length} categorias padrão restauradas.`);
+          }
+       } else {
+          alert('Todas as categorias padrão já existem.');
+       }
+    } catch (err) {
+       console.error(err);
+       alert('Erro ao restaurar padrões.');
+    } finally {
+       setIsLoading(false);
     }
   };
 
@@ -1035,7 +1244,7 @@ const App = () => {
              category: t.category,
              user: t.user,
              date: newDate.toISOString().split('T')[0],
-             is_recurring: true,
+             is_recurring: t.is_recurring,
              recurring_months: t.recurring_months
           });
           count++;
@@ -1145,8 +1354,7 @@ const App = () => {
               onUpdate={updateTransaction}
               onDelete={deleteTransaction} 
               isLoading={isLoading} 
-              customCategories={customCategories}
-              onAddCategory={addCustomCategory}
+              categories={categories}
               currentDate={currentDate}
               onMonthChange={setCurrentDate}
               onGenerateRecurring={generateRecurringTransactions}
@@ -1166,7 +1374,15 @@ const App = () => {
       case 'advisor':
         return <AdvisorPage transactions={transactions} investments={investments} currentUser={currentUser} />;
       case 'settings':
-        return <SettingsPage />;
+        return (
+           <SettingsPage 
+              categories={categories} 
+              onAddCategory={addCategory} 
+              onUpdateCategory={updateCategory}
+              onDeleteCategory={deleteCategory}
+              onRestoreDefaults={restoreDefaults}
+           />
+        );
       default:
         return null;
     }
