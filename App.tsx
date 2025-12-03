@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
-  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu
+  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit
 } from './components/Icons';
 import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
 import { MonthlyChart, CategoryChart } from './components/Charts';
@@ -22,6 +21,7 @@ const getMonthLabel = (date: Date) => {
 const TransactionsPage = ({ 
   transactions, 
   onAdd, 
+  onUpdate,
   onDelete,
   isLoading,
   customCategories,
@@ -33,6 +33,7 @@ const TransactionsPage = ({
 }: { 
   transactions: Transaction[]; 
   onAdd: (t: Omit<Transaction, 'id'>) => void; 
+  onUpdate: (id: string, t: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   isLoading: boolean;
   customCategories: { id: string, name: string, type: string }[];
@@ -53,6 +54,9 @@ const TransactionsPage = ({
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  
+  // Edit State
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   // Initial Category Setup
   useEffect(() => {
@@ -75,6 +79,19 @@ const TransactionsPage = ({
       recurring_months: form.is_recurring && form.recurring_months ? Number(form.recurring_months) : 0
     });
     setForm({ ...form, description: '', amount: '', is_recurring: false, recurring_months: '' });
+  };
+  
+  const handleUpdateSubmit = () => {
+     if (editingTransaction) {
+        onUpdate(editingTransaction.id, {
+           description: editingTransaction.description,
+           amount: editingTransaction.amount,
+           date: editingTransaction.date,
+           category: editingTransaction.category,
+           type: editingTransaction.type
+        });
+        setEditingTransaction(null);
+     }
   };
 
   const handleCreateCategory = () => {
@@ -100,6 +117,14 @@ const TransactionsPage = ({
     const customCats = customCategories.filter(c => c.type === form.type).map(c => c.name);
     return [...defaultCats, ...customCats].sort();
   }, [form.type, customCategories]);
+  
+  // Categories for editing might depend on the transaction type being edited
+  const editAvailableCategories = useMemo(() => {
+     if (!editingTransaction) return [];
+     const defaultCats = editingTransaction.type === 'receita' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE;
+     const customCats = customCategories.filter(c => c.type === editingTransaction.type).map(c => c.name);
+     return [...defaultCats, ...customCats].sort();
+  }, [editingTransaction, customCategories]);
 
   // Filter Transactions by Selected Month AND Current User
   const filteredTransactions = transactions.filter(t => {
@@ -260,7 +285,10 @@ const TransactionsPage = ({
                   <td className={`p-4 text-right font-bold whitespace-nowrap ${t.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {t.type === 'receita' ? '+' : '-'} {formatCurrency(t.amount)}
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="p-4 text-center flex items-center justify-center gap-2">
+                    <button onClick={() => setEditingTransaction(t)} disabled={isLoading} className="text-slate-400 hover:text-blue-500 transition-colors disabled:opacity-50">
+                       <IconEdit className="w-4 h-4" />
+                    </button>
                     <button onClick={() => onDelete(t.id)} disabled={isLoading} className="text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50">
                       <IconTrash className="w-4 h-4" />
                     </button>
@@ -279,6 +307,7 @@ const TransactionsPage = ({
         </div>
       </div>
 
+      {/* New Category Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova Categoria">
          <div className="space-y-4">
             <Input 
@@ -289,6 +318,41 @@ const TransactionsPage = ({
             />
             <Button onClick={handleCreateCategory} className="w-full">Criar</Button>
          </div>
+      </Modal>
+
+      {/* Edit Transaction Modal */}
+      <Modal isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Editar Transação">
+         {editingTransaction && (
+            <div className="space-y-4">
+               <Input 
+                  label="Descrição" 
+                  value={editingTransaction.description} 
+                  onChange={e => setEditingTransaction({...editingTransaction, description: e.target.value})} 
+               />
+               <Input 
+                  label="Valor (R$)" 
+                  type="number"
+                  value={editingTransaction.amount} 
+                  onChange={e => setEditingTransaction({...editingTransaction, amount: Number(e.target.value)})} 
+               />
+               <div className="flex flex-col gap-1 w-full">
+                  <label className="text-xs font-semibold uppercase text-slate-500">Data</label>
+                  <input 
+                     type="date" 
+                     value={editingTransaction.date} 
+                     onChange={e => setEditingTransaction({...editingTransaction, date: e.target.value})}
+                     className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
+                  />
+               </div>
+               <Select 
+                  label="Categoria"
+                  value={editingTransaction.category}
+                  onChange={e => setEditingTransaction({...editingTransaction, category: e.target.value})}
+                  options={editAvailableCategories}
+               />
+               <Button onClick={handleUpdateSubmit} className="w-full">Salvar Alterações</Button>
+            </div>
+         )}
       </Modal>
     </div>
   );
@@ -823,29 +887,65 @@ const App = () => {
   const addTransaction = async (t: Omit<Transaction, 'id'>) => {
     setIsLoading(true);
     try {
+       const transactionsToInsert = [];
+       const months = (t.is_recurring && t.recurring_months && t.recurring_months > 0) ? t.recurring_months : 1;
+       
+       for (let i = 0; i < months; i++) {
+          const dateObj = new Date(t.date);
+          dateObj.setMonth(dateObj.getMonth() + i);
+          
+          transactionsToInsert.push({
+             description: t.description,
+             amount: t.amount,
+             type: t.type,
+             category: t.category,
+             user: t.user,
+             date: dateObj.toISOString().split('T')[0],
+             is_recurring: t.is_recurring,
+             recurring_months: t.recurring_months
+          });
+       }
+
       const { data, error } = await supabase
         .from('transactions')
-        .insert([{
-          description: t.description,
-          amount: t.amount,
-          type: t.type,
-          category: t.category,
-          user: t.user,
-          date: t.date,
-          is_recurring: t.is_recurring,
-          recurring_months: t.recurring_months
-        }])
+        .insert(transactionsToInsert)
         .select();
 
       if (error) throw error;
       if (data) {
-        setTransactions(prev => [...prev, data[0] as Transaction]);
+        setTransactions(prev => [...prev, ...data as Transaction[]]);
+        if (months > 1) alert(`Transação repetida por ${months} meses criada com sucesso!`);
       }
     } catch (err) {
       alert("Erro ao salvar transação. Verifique console.");
       console.error(err);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    setIsLoading(true);
+    try {
+       const { error } = await supabase
+          .from('transactions')
+          .update({
+             description: updates.description,
+             amount: updates.amount,
+             date: updates.date,
+             category: updates.category,
+             type: updates.type
+          })
+          .eq('id', id);
+          
+       if (error) throw error;
+       
+       setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    } catch (err) {
+       alert("Erro ao atualizar transação.");
+       console.error(err);
+    } finally {
+       setIsLoading(false);
     }
   };
 
@@ -1042,6 +1142,7 @@ const App = () => {
            <TransactionsPage 
               transactions={transactions} 
               onAdd={addTransaction} 
+              onUpdate={updateTransaction}
               onDelete={deleteTransaction} 
               isLoading={isLoading} 
               customCategories={customCategories}
