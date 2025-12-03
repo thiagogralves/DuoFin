@@ -7,7 +7,6 @@ export const CATEGORIES = {
   INCOME: [
     'Dividendos',
     'Freelance',
-    'Investimentos',
     'Presente',
     'Renda Extra',
     'Salário',
@@ -17,6 +16,8 @@ export const CATEGORIES = {
     'Outros'
   ],
   EXPENSE: [
+    'Academia',
+    'Alimentação',
     'Aluguel',
     'Assinaturas (Streaming)',
     'Água/Esgoto',
@@ -25,15 +26,18 @@ export const CATEGORIES = {
     'Celular',
     'Condomínio',
     'Educação',
+    'Empréstimo',
     'Energia Elétrica',
+    'Farmácia',
     'Impostos',
     'Internet/TV',
     'Lazer',
     'Mercado',
     'Pets',
     'Presentes',
+    'Restaurante',
     'Roupas/Acessórios',
-    'Saúde/Farmácia',
+    'Saúde,
     'Transporte',
     'Viagem',
     'Outros'
