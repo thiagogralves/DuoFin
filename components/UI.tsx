@@ -108,7 +108,7 @@ export const Modal = ({
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) => {
   if (!isOpen) return null;
   return (

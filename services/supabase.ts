@@ -1,14 +1,15 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURAÇÃO OBRIGATÓRIA ---
-// Substitua os valores abaixo pelos dados do seu projeto no Supabase
-// Você encontra isso em: Project Settings -> API
-const SUPABASE_URL = 'https://flneoarypfioxannmlzx.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_IwjbveNasbtYMSM9M7_3OA_-I_IKncZ';
+// 1. Acesse seu projeto no Supabase (supabase.com/dashboard)
+// 2. Vá em Settings (Engrenagem) > API
+// 3. Em "Project API keys", copie a chave "anon" "public"
+// 4. A chave CORRETA começa com "ey..." (é um token JWT longo)
 
-// Verificação simples para avisar se esqueceu de configurar
-if (SUPABASE_URL.includes('SUA_URL') || SUPABASE_ANON_KEY.includes('SUA_CHAVE')) {
-  console.warn('⚠️ ATENÇÃO: As chaves do Supabase não foram configuradas no arquivo services/supabase.ts');
-}
+const SUPABASE_URL = 'https://flneoarypfioxannmlzx.supabase.co';
+
+// ⚠️ COLE SUA CHAVE "anon" "public" ABAIXO (Deve começar com ey...)
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbmVvYXJ5cGZpb3hhbm5tbHp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NDgwODgsImV4cCI6MjA4MDIyNDA4OH0.toSsXL8knsSXzLaT62k6Uy7mtw54rE84z9UkhujwmAE'; 
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

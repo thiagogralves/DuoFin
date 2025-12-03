@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Investment } from '../types';
 
@@ -6,16 +7,11 @@ export const getFinancialAdvice = async (
   investments: Investment[]
 ): Promise<string> => {
   try {
-    // 1. Tenta pegar do ambiente (Vercel)
-    let apiKey = process.env.API_KEY;
-
-    // 2. Se não tiver, tenta pegar do navegador (configurado pelo usuário)
-    if (!apiKey) {
-      apiKey = localStorage.getItem('gemini_api_key') || undefined;
-    }
+    // Busca chave apenas do ambiente (configurada na Vercel)
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-      return "⚠️ <strong>Chave de API não configurada.</strong><br/>Por favor, vá em <strong>Configurações</strong> e cole sua chave do Google Gemini.";
+      return "⚠️ <strong>Chave de API não configurada no servidor.</strong><br/>Configure a variável de ambiente API_KEY no painel da Vercel.";
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -61,6 +57,6 @@ export const getFinancialAdvice = async (
     return response.text || "Não foi possível gerar conselhos no momento.";
   } catch (error) {
     console.error("Erro ao consultar Gemini:", error);
-    return "Desculpe, ocorreu um erro ao tentar analisar suas finanças. Verifique se sua chave de API está correta em Configurações.";
+    return "Desculpe, ocorreu um erro ao tentar analisar suas finanças. Tente novamente mais tarde.";
   }
 };

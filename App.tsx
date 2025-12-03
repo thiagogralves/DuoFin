@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
@@ -47,7 +48,8 @@ const TransactionsPage = ({
     type: 'despesa' as TransactionType,
     category: '',
     date: new Date().toISOString().split('T')[0],
-    is_recurring: false
+    is_recurring: false,
+    recurring_months: ''
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -69,9 +71,10 @@ const TransactionsPage = ({
       category: form.category,
       user: currentUser, // Auto-assign current user
       date: form.date,
-      is_recurring: form.is_recurring
+      is_recurring: form.is_recurring,
+      recurring_months: form.is_recurring && form.recurring_months ? Number(form.recurring_months) : 0
     });
-    setForm({ ...form, description: '', amount: '', is_recurring: false });
+    setForm({ ...form, description: '', amount: '', is_recurring: false, recurring_months: '' });
   };
 
   const handleCreateCategory = () => {
@@ -136,7 +139,7 @@ const TransactionsPage = ({
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <IconPlus className="w-5 h-5" /> Nova Movimentação ({currentUser})
           </h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
             <div className="lg:col-span-2">
               <Input 
                 label="Descrição" 
@@ -191,16 +194,25 @@ const TransactionsPage = ({
               </button>
             </div>
             
-            <div className="lg:col-span-1 flex items-center pt-5">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="lg:col-span-1 flex flex-col pt-1">
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
                   <input 
                     type="checkbox" 
                     checked={form.is_recurring} 
                     onChange={e => setForm({...form, is_recurring: e.target.checked})}
                     className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
                   />
-                  <span className="text-sm text-slate-700 font-medium">Fixa/Recorrente?</span>
+                  <span className="text-sm text-slate-700 font-medium">Recorrente?</span>
               </label>
+              {form.is_recurring && (
+                 <Input 
+                    label="Meses" 
+                    type="number" 
+                    placeholder="Ex: 12" 
+                    value={form.recurring_months} 
+                    onChange={e => setForm({...form, recurring_months: e.target.value})}
+                 />
+              )}
             </div>
             <div className="lg:col-span-4 flex justify-end mt-2">
               <Button disabled={isLoading} className="w-full md:w-auto px-8">
@@ -229,7 +241,14 @@ const TransactionsPage = ({
                 <tr key={t.id} className="border-b hover:bg-slate-50">
                   <td className="p-4 whitespace-nowrap">
                     {new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                    {t.is_recurring && <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200">FIXA</span>}
+                    {t.is_recurring && (
+                        <div className="flex flex-col mt-1">
+                           <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200 w-fit">FIXA</span>
+                           {t.recurring_months && t.recurring_months > 0 && (
+                              <span className="text-[10px] text-slate-400 mt-0.5">{t.recurring_months} meses</span>
+                           )}
+                        </div>
+                    )}
                   </td>
                   <td className="p-4 font-medium text-slate-800 whitespace-nowrap">{t.description}</td>
                   <td className="p-4">
@@ -629,20 +648,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
 
 // 5. Settings Page
 const SettingsPage = () => {
-  const [apiKey, setApiKey] = useState('');
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    const key = localStorage.getItem('gemini_api_key');
-    if (key) setApiKey(key);
-  }, []);
-
-  const handleSaveKey = () => {
-    localStorage.setItem('gemini_api_key', apiKey);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
   const handleLogout = () => {
      localStorage.removeItem('app_authenticated');
      window.location.reload();
@@ -664,29 +669,10 @@ const SettingsPage = () => {
       </Card>
       
       <Card>
-         <h3 className="text-lg font-bold text-slate-800 mb-4">Configuração da IA</h3>
-         <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-               Para usar o "Consultor AI", você precisa de uma chave gratuita do Google. 
-               <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 hover:underline ml-1">Gerar Chave aqui</a>.
-            </p>
-            <Input 
-               label="Chave da API Google Gemini" 
-               value={apiKey} 
-               onChange={e => setApiKey(e.target.value)} 
-               placeholder="Cole sua chave aqui (começa com AIza...)"
-            />
-            <Button onClick={handleSaveKey} variant={saved ? "success" : "primary"} className="w-full">
-               {saved ? 'Chave Salva!' : 'Salvar Chave'}
-            </Button>
-         </div>
-      </Card>
-
-      <Card>
-        <h3 className="text-lg font-bold text-slate-800 mb-2">Conta</h3>
-        <Button onClick={handleLogout} variant="danger" className="w-full">
+         <h3 className="text-lg font-bold text-slate-800 mb-4">Conta</h3>
+         <Button onClick={handleLogout} variant="danger" className="w-full">
            Sair do Aplicativo
-        </Button>
+         </Button>
       </Card>
     </div>
   );
@@ -821,7 +807,8 @@ const App = () => {
         setError('Configuração do Supabase pendente. Edite o arquivo services/supabase.ts');
       } else {
         // Safe error fallback
-        setError('Erro ao conectar ao banco de dados. Verifique a configuração.');
+        const msg = typeof err === 'object' && err?.message ? err.message : 'Erro ao conectar ao banco de dados.';
+        setError(msg);
       }
     } finally {
       setIsLoading(false);
@@ -845,7 +832,8 @@ const App = () => {
           category: t.category,
           user: t.user,
           date: t.date,
-          is_recurring: t.is_recurring
+          is_recurring: t.is_recurring,
+          recurring_months: t.recurring_months
         }])
         .select();
 
@@ -947,7 +935,8 @@ const App = () => {
              category: t.category,
              user: t.user,
              date: newDate.toISOString().split('T')[0],
-             is_recurring: true
+             is_recurring: true,
+             recurring_months: t.recurring_months
           });
           count++;
        }
@@ -1030,7 +1019,7 @@ const App = () => {
       return (
         <Card className="bg-red-50 border-red-200">
            <h3 className="text-red-700 font-bold mb-2">Configuração Necessária</h3>
-           <p className="text-red-600">{error}</p>
+           <p className="text-red-600">{typeof error === 'string' ? error : 'Ocorreu um erro desconhecido (verifique o console).'}</p>
         </Card>
       );
     }

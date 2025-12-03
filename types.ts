@@ -1,3 +1,4 @@
+
 export type User = 'Thiago' | 'Marcela' | 'Ambos';
 
 export type TransactionType = 'receita' | 'despesa';
@@ -13,6 +14,7 @@ export interface Transaction {
   user: User;
   date: string; // ISO Date string YYYY-MM-DD
   is_recurring?: boolean;
+  recurring_months?: number;
 }
 
 export interface InvestmentOperation {
