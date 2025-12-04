@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
-  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff
+  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff, IconCheck, IconClock
 } from './components/Icons';
 import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
 import { MonthlyChart, CategoryChart } from './components/Charts';
-import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category } from './types';
+import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category, PaymentMethod } from './types';
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
 import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
@@ -13,6 +13,16 @@ import { supabase } from './services/supabase';
 // --- Helper Functions ---
 const getMonthLabel = (date: Date) => {
   return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
+const getMethodLabel = (method: string) => {
+   const labels: Record<string, string> = {
+      dinheiro: 'Dinheiro',
+      pix: 'Pix',
+      cartao: 'Cartão',
+      boleto: 'Contas à Pagar'
+   };
+   return labels[method] || method;
 };
 
 // --- Sub-components ---
@@ -23,6 +33,7 @@ const TransactionsPage = ({
   onAdd, 
   onUpdate,
   onDelete,
+  onToggleStatus,
   isLoading,
   categories,
   currentDate,
@@ -35,6 +46,7 @@ const TransactionsPage = ({
   onAdd: (t: Omit<Transaction, 'id'>) => void; 
   onUpdate: (id: string, t: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
+  onToggleStatus: (id: string, currentStatus: boolean) => void;
   isLoading: boolean;
   categories: Category[];
   currentDate: Date;
@@ -50,7 +62,8 @@ const TransactionsPage = ({
     category: '',
     date: new Date().toISOString().split('T')[0],
     is_recurring: false,
-    recurring_months: ''
+    recurring_months: '',
+    payment_method: 'pix' as PaymentMethod
   });
   
   // Edit State
@@ -67,6 +80,9 @@ const TransactionsPage = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.description || !form.amount) return;
+    
+    // Auto-set status: Dinheiro/Pix = Paid, others = Pending
+    const autoPaid = ['dinheiro', 'pix'].includes(form.payment_method);
 
     onAdd({
       description: form.description,
@@ -76,9 +92,11 @@ const TransactionsPage = ({
       user: currentUser, // Auto-assign current user
       date: form.date,
       is_recurring: form.is_recurring,
-      recurring_months: form.is_recurring && form.recurring_months ? Number(form.recurring_months) : 0
+      recurring_months: form.is_recurring && form.recurring_months ? Number(form.recurring_months) : 0,
+      payment_method: form.payment_method,
+      is_paid: autoPaid
     });
-    setForm({ ...form, description: '', amount: '', is_recurring: false, recurring_months: '' });
+    setForm({ ...form, description: '', amount: '', is_recurring: false, recurring_months: '', payment_method: 'pix' });
   };
   
   const handleUpdateSubmit = () => {
@@ -88,7 +106,8 @@ const TransactionsPage = ({
            amount: editingTransaction.amount,
            date: editingTransaction.date,
            category: editingTransaction.category,
-           type: editingTransaction.type
+           type: editingTransaction.type,
+           payment_method: editingTransaction.payment_method
         });
         setEditingTransaction(null);
      }
@@ -188,6 +207,19 @@ const TransactionsPage = ({
                 <option value="despesa">Despesa</option>
               </select>
             </div>
+            <div className="flex flex-col gap-1 w-full">
+              <label className="text-xs font-semibold uppercase text-slate-500">Pagamento</label>
+              <select 
+                value={form.payment_method} 
+                onChange={e => setForm({...form, payment_method: e.target.value as PaymentMethod})}
+                className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
+              >
+                <option value="pix">Pix</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="cartao">Cartão</option>
+                <option value="boleto">Contas à Pagar</option>
+              </select>
+            </div>
             <div className="flex items-end gap-2 lg:col-span-2">
               <div className="flex-1">
                 <Select 
@@ -237,13 +269,15 @@ const TransactionsPage = ({
                 <th className="p-4">Descrição</th>
                 <th className="p-4">Quem</th>
                 <th className="p-4">Categoria</th>
+                <th className="p-4">Forma</th>
                 <th className="p-4 text-right">Valor</th>
+                <th className="p-4 text-center">Status</th>
                 <th className="p-4 text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
               {filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
-                <tr key={t.id} className="border-b hover:bg-slate-50">
+                <tr key={t.id} className={`border-b hover:bg-opacity-80 transition-colors ${t.is_paid ? 'bg-emerald-50' : 'bg-white'}`}>
                   <td className="p-4 whitespace-nowrap">
                     {new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                     {t.is_recurring && (
@@ -262,10 +296,34 @@ const TransactionsPage = ({
                     </span>
                   </td>
                   <td className="p-4 text-slate-500 whitespace-nowrap">{t.category}</td>
+                  <td className="p-4 text-slate-600 text-xs uppercase font-semibold whitespace-nowrap">
+                     {getMethodLabel(t.payment_method || 'pix')}
+                  </td>
                   <td className={`p-4 text-right font-bold whitespace-nowrap ${t.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {t.type === 'receita' ? '+' : '-'} {formatCurrency(t.amount, hidden)}
                   </td>
+                  <td className="p-4 text-center">
+                     {t.is_paid ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold border border-emerald-200 bg-white px-2 py-1 rounded-full">
+                           <IconCheck className="w-3 h-3"/> Pago
+                        </span>
+                     ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-bold border border-amber-200 bg-white px-2 py-1 rounded-full">
+                           <IconClock className="w-3 h-3"/> Pendente
+                        </span>
+                     )}
+                  </td>
                   <td className="p-4 text-center flex items-center justify-center gap-2">
+                    {!t.is_paid && (
+                       <button onClick={() => onToggleStatus(t.id, false)} title="Marcar como Pago" className="text-slate-400 hover:text-emerald-500 bg-white border border-slate-200 p-1 rounded-full hover:border-emerald-500 transition-colors">
+                          <IconCheck className="w-4 h-4" />
+                       </button>
+                    )}
+                    {t.is_paid && (
+                       <button onClick={() => onToggleStatus(t.id, true)} title="Reabrir (Marcar como Pendente)" className="text-emerald-500 hover:text-amber-500 bg-white border border-emerald-200 p-1 rounded-full hover:border-amber-500 transition-colors opacity-50 hover:opacity-100">
+                          <IconRefresh className="w-4 h-4" />
+                       </button>
+                    )}
                     <button onClick={() => setEditingTransaction(t)} disabled={isLoading} className="text-slate-400 hover:text-blue-500 transition-colors disabled:opacity-50">
                        <IconEdit className="w-4 h-4" />
                     </button>
@@ -277,7 +335,7 @@ const TransactionsPage = ({
               ))}
               {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
                     Nenhuma transação encontrada neste mês para {currentUser === 'Ambos' ? 'Geral' : currentUser}.
                   </td>
                 </tr>
@@ -310,6 +368,19 @@ const TransactionsPage = ({
                      onChange={e => setEditingTransaction({...editingTransaction, date: e.target.value})}
                      className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
                   />
+               </div>
+               <div className="flex flex-col gap-1 w-full">
+                  <label className="text-xs font-semibold uppercase text-slate-500">Pagamento</label>
+                  <select 
+                    value={editingTransaction.payment_method || 'pix'} 
+                    onChange={e => setEditingTransaction({...editingTransaction, payment_method: e.target.value as PaymentMethod})}
+                    className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none w-full"
+                  >
+                    <option value="pix">Pix</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="cartao">Cartão</option>
+                    <option value="boleto">Contas à Pagar</option>
+                  </select>
                </div>
                <Select 
                   label="Categoria"
@@ -509,7 +580,12 @@ const DashboardPage = ({
   );
 };
 
-// 3. Investments Page (Unchanged)
+// ... Investments Page (Same) ...
+// ... Advisor Page (Same) ...
+// ... Settings Page (Same) ...
+
+// (Reusing unchanged components to keep file clean, only updating Main App structure below)
+
 const InvestmentsPage = ({ 
   investments, 
   onAdd, 
@@ -642,7 +718,6 @@ const InvestmentsPage = ({
   );
 };
 
-// 4. Advisor Page
 const AdvisorPage = ({ transactions, investments, currentUser }: { transactions: Transaction[], investments: Investment[], currentUser: User }) => {
   const [advice, setAdvice] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -682,7 +757,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
   );
 };
 
-// 5. Settings Page (Unifying Categories)
 const SettingsPage = ({
   categories,
   onAddCategory,
@@ -847,7 +921,6 @@ const SettingsPage = ({
   );
 };
 
-// 6. Login Page (Unchanged)
 const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
    const [password, setPassword] = useState('');
    const [error, setError] = useState(false);
@@ -889,8 +962,6 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
       </div>
    );
 };
-
-// --- Main App Component ---
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -952,6 +1023,12 @@ const App = () => {
         setUnlockError(true);
      }
   };
+  
+  const handleCancelUnlock = () => {
+     setUnlockModalOpen(false);
+     setUnlockPassword('');
+     setUnlockError(false);
+  };
 
   // Load Data from Supabase
   const fetchData = async () => {
@@ -978,7 +1055,6 @@ const App = () => {
       if (catError && catError.code !== '42P01') console.error(catError); 
 
       // 3.1 Migration Logic: Force Sync defaults
-      // Check which defaults are missing from the DB
       const existingNames = (catData || []).map((c: any) => c.name);
       const missingDefaults: any[] = [];
       
@@ -1029,7 +1105,6 @@ const App = () => {
       if (err.message?.includes('Invalid URL')) {
         setError('Configuração do Supabase pendente. Edite o arquivo services/supabase.ts');
       } else {
-        // Safe error fallback
         const msg = typeof err === 'object' && err?.message ? err.message : 'Erro ao conectar ao banco de dados.';
         setError(msg);
       }
@@ -1061,7 +1136,9 @@ const App = () => {
              user: t.user,
              date: dateObj.toISOString().split('T')[0],
              is_recurring: t.is_recurring,
-             recurring_months: t.recurring_months
+             recurring_months: t.recurring_months,
+             payment_method: t.payment_method || 'pix',
+             is_paid: t.is_paid
           });
        }
 
@@ -1093,7 +1170,8 @@ const App = () => {
              amount: updates.amount,
              date: updates.date,
              category: updates.category,
-             type: updates.type
+             type: updates.type,
+             payment_method: updates.payment_method
           })
           .eq('id', id);
           
@@ -1106,6 +1184,24 @@ const App = () => {
     } finally {
        setIsLoading(false);
     }
+  };
+  
+  const toggleTransactionStatus = async (id: string, currentStatus: boolean) => {
+     setIsLoading(true);
+     try {
+        const { error } = await supabase
+           .from('transactions')
+           .update({ is_paid: !currentStatus })
+           .eq('id', id);
+           
+        if (error) throw error;
+        setTransactions(prev => prev.map(t => t.id === id ? { ...t, is_paid: !currentStatus } : t));
+     } catch (err) {
+        alert("Erro ao atualizar status.");
+        console.error(err);
+     } finally {
+        setIsLoading(false);
+     }
   };
 
   const deleteTransaction = async (id: string) => {
@@ -1123,7 +1219,7 @@ const App = () => {
     }
   };
 
-  // Category Actions
+  // ... Category Actions (unchanged) ...
   const addCategory = async (name: string, type: string) => {
     try {
       const { data, error } = await supabase.from('categories').insert([{ name, type, is_system: false }]).select();
@@ -1137,26 +1233,12 @@ const App = () => {
   
   const updateCategory = async (id: string, oldName: string, newName: string) => {
      try {
-        // 1. Update Category Name
-        const { error: catError } = await supabase
-           .from('categories')
-           .update({ name: newName })
-           .eq('id', id);
-           
+        const { error: catError } = await supabase.from('categories').update({ name: newName }).eq('id', id);
         if (catError) throw catError;
-        
-        // 2. Cascade Update Transactions
-        const { error: transError } = await supabase
-           .from('transactions')
-           .update({ category: newName })
-           .eq('category', oldName);
-           
+        const { error: transError } = await supabase.from('transactions').update({ category: newName }).eq('category', oldName);
         if (transError) console.error("Erro ao atualizar transações antigas:", transError);
-        
-        // 3. Update Local State
         setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
         setTransactions(prev => prev.map(t => t.category === oldName ? { ...t, category: newName } : t));
-        
      } catch (err) {
         console.error(err);
         alert('Erro ao renomear categoria.');
@@ -1164,13 +1246,11 @@ const App = () => {
   };
 
   const deleteCategory = async (id: string, name: string) => {
-    // Check usage
     const isUsed = transactions.some(t => t.category === name);
     if (isUsed) {
        alert(`Não é possível excluir a categoria "${name}" pois ela é usada em transações.`);
        return;
     }
-    
     if (!confirm('Excluir esta categoria?')) return;
     try {
       const { error } = await supabase.from('categories').delete().eq('id', id);
@@ -1184,20 +1264,16 @@ const App = () => {
 
   const restoreDefaults = async () => {
     if (!confirm('Isso adicionará as categorias padrão (Aluguel, Mercado, etc) se elas não existirem. Deseja continuar?')) return;
-    
     setIsLoading(true);
     try {
        const existingNames = categories.map(c => c.name);
        const toInsert = [];
-       
        CATEGORIES.INCOME.forEach(name => {
           if (!existingNames.includes(name)) toInsert.push({ name, type: 'receita', is_system: true });
        });
-       
        CATEGORIES.EXPENSE.forEach(name => {
           if (!existingNames.includes(name)) toInsert.push({ name, type: 'despesa', is_system: true });
        });
-       
        if (toInsert.length > 0) {
           const { data, error } = await supabase.from('categories').insert(toInsert).select();
           if (error) throw error;
@@ -1248,7 +1324,7 @@ const App = () => {
        return tDate.getMonth() === prevMonthDate.getMonth() && 
               tDate.getFullYear() === prevMonthDate.getFullYear() &&
               t.is_recurring &&
-              (currentUser === 'Ambos' ? true : t.user === currentUser); // Check recurrence for current user view
+              (currentUser === 'Ambos' ? true : t.user === currentUser);
     });
 
     if (prevMonthTransactions.length === 0) {
@@ -1277,7 +1353,9 @@ const App = () => {
              user: t.user,
              date: newDate.toISOString().split('T')[0],
              is_recurring: t.is_recurring,
-             recurring_months: t.recurring_months
+             recurring_months: t.recurring_months,
+             payment_method: t.payment_method || 'pix',
+             is_paid: t.is_paid
           });
           count++;
        }
@@ -1354,7 +1432,6 @@ const App = () => {
     return { income, expenses, balance: income - expenses, invested };
   }, [transactions, investments, currentUser]);
 
-  // Render Helpers
   const renderContent = () => {
     if (error) {
       return (
@@ -1386,6 +1463,7 @@ const App = () => {
               onAdd={addTransaction} 
               onUpdate={updateTransaction}
               onDelete={deleteTransaction} 
+              onToggleStatus={toggleTransactionStatus}
               isLoading={isLoading} 
               categories={categories}
               currentDate={currentDate}
@@ -1429,7 +1507,6 @@ const App = () => {
      return <LoginPage onLogin={handleLogin} />;
   }
 
-  // Dynamic Background based on selected User
   const getMainBackground = () => {
     if (currentUser === 'Thiago') return 'bg-blue-50/50';
     if (currentUser === 'Marcela') return 'bg-pink-50/50';
@@ -1438,7 +1515,6 @@ const App = () => {
 
   return (
     <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-500 ${getMainBackground()}`}>
-      {/* Sidebar Navigation */}
       <aside className={`
         bg-white border-r border-slate-200 flex-shrink-0 z-50
         md:w-64 md:h-screen md:sticky md:top-0 
@@ -1500,7 +1576,6 @@ const App = () => {
         </nav>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 pt-24 md:pt-8 overflow-y-auto">
         <header className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
@@ -1546,8 +1621,7 @@ const App = () => {
         {renderContent()}
       </main>
       
-      {/* Unlock Privacy Modal */}
-      <Modal isOpen={unlockModalOpen} onClose={() => { setUnlockModalOpen(false); setUnlockPassword(''); setUnlockError(false); }} title="Desbloquear Visualização">
+      <Modal isOpen={unlockModalOpen} onClose={handleCancelUnlock} title="Desbloquear Visualização">
          <div className="space-y-4">
             <p className="text-sm text-slate-600">Digite a senha do aplicativo para visualizar os valores.</p>
             <Input 
@@ -1558,19 +1632,21 @@ const App = () => {
                placeholder="Digite a senha..."
             />
             {unlockError && <p className="text-red-500 text-sm">Senha incorreta.</p>}
-            <Button onClick={handleUnlock} className="w-full">Desbloquear</Button>
+            <div className="flex gap-2">
+               <Button onClick={handleCancelUnlock} variant="secondary" className="w-full">Cancelar</Button>
+               <Button onClick={handleUnlock} className="w-full">Desbloquear</Button>
+            </div>
          </div>
       </Modal>
     </div>
   );
 };
 
-// Nav Button Component
 const NavButton = ({ 
   active, 
   onClick, 
   icon, 
-  label,
+  label, 
   special = false
 }: { 
   active: boolean; 
