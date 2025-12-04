@@ -8,7 +8,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
+      // Usando a chave fornecida diretamente no build
+      'process.env.API_KEY': JSON.stringify('AIzaSyDGZIl5X1VnHaGOa9JjM6CnNKaFJA8QQmg')
     }
   }
 })
