@@ -42,7 +42,7 @@ export const MonthlyChart = ({ transactions, hidden = false }: ChartsProps) => {
   if (data.length === 0) return <div className="text-center text-slate-400 py-10">Sem dados suficientes</div>;
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-60 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -89,17 +89,19 @@ export const CategoryChart = ({ transactions, hidden = false }: ChartsProps) => 
   if (data.length === 0) return <div className="text-center text-slate-400 py-10">Sem despesas registradas</div>;
 
   return (
-    <div className="h-72 w-full flex justify-center">
+    <div className="h-60 w-full flex justify-center">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             data={data}
             cx="50%"
             cy="50%"
-            innerRadius={60}
-            outerRadius={80}
+            innerRadius={45}
+            outerRadius={65}
             paddingAngle={5}
             dataKey="value"
+            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+            labelLine={true}
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -109,7 +111,7 @@ export const CategoryChart = ({ transactions, hidden = false }: ChartsProps) => 
              formatter={(value: number) => formatCurrency(value, hidden)}
              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
           />
-          <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }}/>
+          <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px', maxWidth: '40%' }}/>
         </PieChart>
       </ResponsiveContainer>
     </div>
