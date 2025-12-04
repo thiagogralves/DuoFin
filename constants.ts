@@ -35,7 +35,7 @@ export const CATEGORIES = {
     'Pets',
     'Presentes',
     'Roupas/Acessórios',
-    'Saúde,
+    'Saúde',
     'Transporte',
     'Viagem',
     'Outros'
