@@ -34,24 +34,30 @@ const MonthSelector = ({ currentDate, onChange }: { currentDate: Date, onChange:
    nextDate.setMonth(currentDate.getMonth() + 1);
 
    return (
-      <div className="flex justify-center items-center gap-2 md:gap-4 bg-white p-2 rounded-full shadow-sm border border-slate-100 max-w-sm mx-auto mb-6 select-none">
-        <button 
-          onClick={() => onChange(prevDate)} 
-          className="text-slate-400 text-xs md:text-sm font-medium hover:text-slate-600 px-3 capitalize transition-colors"
-        >
-           {getMonthName(prevDate)}
-        </button>
-        
-        <div className="bg-slate-100 text-slate-800 font-bold px-6 py-2 rounded-full capitalize shadow-inner text-sm md:text-base border border-slate-200">
-           {getMonthName(currentDate)}
+      <div className="flex flex-col items-center gap-1 mb-6">
+        <div className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1 rounded-full border border-slate-200">
+           {currentDate.getFullYear()}
         </div>
-        
-        <button 
-          onClick={() => onChange(nextDate)} 
-          className="text-slate-400 text-xs md:text-sm font-medium hover:text-slate-600 px-3 capitalize transition-colors"
-        >
-           {getMonthName(nextDate)}
-        </button>
+
+        <div className="flex justify-center items-center gap-2 md:gap-4 bg-white p-2 rounded-full shadow-sm border border-slate-100 max-w-sm mx-auto select-none">
+          <button 
+            onClick={() => onChange(prevDate)} 
+            className="text-slate-400 text-xs md:text-sm font-medium hover:text-slate-600 px-3 capitalize transition-colors"
+          >
+             {getMonthName(prevDate)}
+          </button>
+          
+          <div className="bg-slate-100 text-slate-800 font-bold px-6 py-2 rounded-full capitalize shadow-inner text-sm md:text-base border border-slate-200">
+             {getMonthName(currentDate)}
+          </div>
+          
+          <button 
+            onClick={() => onChange(nextDate)} 
+            className="text-slate-400 text-xs md:text-sm font-medium hover:text-slate-600 px-3 capitalize transition-colors"
+          >
+             {getMonthName(nextDate)}
+          </button>
+        </div>
       </div>
    );
 };
