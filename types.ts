@@ -12,6 +12,7 @@ export interface Category {
   name: string;
   type: TransactionType;
   is_system?: boolean; // True se for categoria padrão (não pode excluir)
+  is_essential?: boolean; // True se for gasto essencial (para gráficos)
 }
 
 export interface Transaction {
@@ -49,6 +50,14 @@ export interface Budget {
   id: string;
   category: string;
   limit_amount: number;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  user: User;
 }
 
 export interface DashboardStats {
