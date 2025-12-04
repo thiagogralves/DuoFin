@@ -1,16 +1,14 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Investment } from '../types';
 
-// Chave API definida diretamente no código conforme solicitado
-const API_KEY = 'AIzaSyDGZIl5X1VnHaGOa9JjM6CnNKaFJA8QQmg';
+// Use API Key from environment (configured in vite.config.ts)
+const API_KEY = process.env.API_KEY;
 
 export const getFinancialAdvice = async (
   transactions: Transaction[],
   investments: Investment[]
 ): Promise<string> => {
   try {
-    // Verifica se a chave existe (agora hardcoded, então sempre existirá)
     if (!API_KEY) {
       return "⚠️ <strong>Erro de Configuração</strong><br/>A chave de API não foi encontrada no código.";
     }
