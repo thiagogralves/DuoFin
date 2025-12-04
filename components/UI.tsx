@@ -2,7 +2,9 @@ import React from 'react';
 import { IconClose } from './Icons';
 
 // Utility for formatting currency to Brazilian Real (pt-BR)
-export const formatCurrency = (value: number): string => {
+// Agora aceita parametro 'hidden' para o modo privacidade
+export const formatCurrency = (value: number, hidden: boolean = false): string => {
+  if (hidden) return 'R$ •••••';
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -131,11 +133,13 @@ export const Modal = ({
 export const ProgressBar = ({ 
   current, 
   max, 
-  label 
+  label,
+  hidden = false
 }: { 
   current: number; 
   max: number; 
   label: string;
+  hidden?: boolean;
 }) => {
   const percentage = Math.min(100, Math.max(0, (current / max) * 100));
   const isOver = current > max;
@@ -145,7 +149,7 @@ export const ProgressBar = ({
       <div className="flex justify-between text-sm mb-1">
         <span className="font-medium text-slate-700">{label}</span>
         <span className={`font-bold ${isOver ? 'text-red-600' : 'text-slate-600'}`}>
-          {formatCurrency(current)} / {formatCurrency(max)}
+          {formatCurrency(current, hidden)} / {formatCurrency(max, hidden)}
         </span>
       </div>
       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
