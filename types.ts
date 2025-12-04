@@ -3,7 +3,16 @@ export type User = 'Thiago' | 'Marcela' | 'Ambos';
 
 export type TransactionType = 'receita' | 'despesa';
 
+export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao' | 'boleto';
+
 export type InvestmentType = 'geral' | 'emergencia';
+
+export interface Category {
+  id: string;
+  name: string;
+  type: TransactionType;
+  is_system?: boolean; // True se for categoria padrão (não pode excluir)
+}
 
 export interface Transaction {
   id: string;
@@ -15,6 +24,8 @@ export interface Transaction {
   date: string; // ISO Date string YYYY-MM-DD
   is_recurring?: boolean;
   recurring_months?: number;
+  payment_method?: PaymentMethod;
+  is_paid?: boolean;
 }
 
 export interface InvestmentOperation {
