@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -193,8 +194,8 @@ export const SemestralChart = ({ transactions = [], hidden = false }: ChartsProp
            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => hidden ? '••' : new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(val)} />
            <Tooltip formatter={(value: number) => formatCurrency(value, hidden)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
            <Legend />
-           <Bar dataKey="Receitas" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-           <Bar dataKey="Despesas" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+           <Bar dataKey="Receitas" fill="#10b981" radius={[4, 4, 0, 0]} />
+           <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
          </BarChart>
        </ResponsiveContainer>
      </div>
