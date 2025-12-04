@@ -11,8 +11,8 @@ import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
 
 // --- Helper Functions ---
-const getMonthLabel = (date: Date) => {
-  return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+const getMonthName = (date: Date) => {
+  return date.toLocaleDateString('pt-BR', { month: 'long' });
 };
 
 const getMethodLabel = (method: string) => {
@@ -23,6 +23,37 @@ const getMethodLabel = (method: string) => {
       boleto: 'Contas à Pagar'
    };
    return labels[method] || method;
+};
+
+// --- Reusable Component ---
+const MonthSelector = ({ currentDate, onChange }: { currentDate: Date, onChange: (d: Date) => void }) => {
+   const prevDate = new Date(currentDate);
+   prevDate.setMonth(currentDate.getMonth() - 1);
+   
+   const nextDate = new Date(currentDate);
+   nextDate.setMonth(currentDate.getMonth() + 1);
+
+   return (
+      <div className="flex justify-center items-center gap-2 md:gap-4 bg-white p-2 rounded-full shadow-sm border border-slate-100 max-w-sm mx-auto mb-6 select-none">
+        <button 
+          onClick={() => onChange(prevDate)} 
+          className="text-slate-400 text-xs md:text-sm font-medium hover:text-slate-600 px-3 capitalize transition-colors"
+        >
+           {getMonthName(prevDate)}
+        </button>
+        
+        <div className="bg-slate-100 text-slate-800 font-bold px-6 py-2 rounded-full capitalize shadow-inner text-sm md:text-base border border-slate-200">
+           {getMonthName(currentDate)}
+        </div>
+        
+        <button 
+          onClick={() => onChange(nextDate)} 
+          className="text-slate-400 text-xs md:text-sm font-medium hover:text-slate-600 px-3 capitalize transition-colors"
+        >
+           {getMonthName(nextDate)}
+        </button>
+      </div>
+   );
 };
 
 // --- Sub-components ---
@@ -144,21 +175,11 @@ const TransactionsPage = ({
   return (
     <div className="space-y-6">
       {/* Month Selector */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-slate-100 rounded-full">
-           &lt; Anterior
-        </button>
-        <h2 className="text-xl font-bold text-slate-800 capitalize flex items-center gap-2">
-           <IconCalendar className="w-5 h-5 text-slate-500"/> {getMonthLabel(currentDate)}
-        </h2>
-        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-slate-100 rounded-full">
-           Próximo &gt;
-        </button>
-      </div>
+      <MonthSelector currentDate={currentDate} onChange={onMonthChange} />
 
       <div className="flex justify-end">
-         <Button variant="secondary" onClick={onGenerateRecurring} className="text-sm">
-            <IconRefresh className="w-4 h-4" /> Checar Recorrentes
+         <Button variant="secondary" onClick={onGenerateRecurring} className="text-xs py-1 px-3">
+            <IconRefresh className="w-3 h-3" /> Checar Recorrentes
          </Button>
       </div>
 
@@ -171,7 +192,7 @@ const TransactionsPage = ({
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <IconPlus className="w-5 h-5" /> Nova Movimentação ({currentUser})
           </h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div className="lg:col-span-2">
               <Input 
                 label="Descrição" 
@@ -220,7 +241,9 @@ const TransactionsPage = ({
                 <option value="boleto">Contas à Pagar</option>
               </select>
             </div>
-            <div className="flex items-end gap-2 lg:col-span-2">
+            
+            {/* Category and Recurring combined row */}
+            <div className="lg:col-span-2 flex items-center gap-4">
               <div className="flex-1">
                 <Select 
                   label="Categoria"
@@ -229,28 +252,33 @@ const TransactionsPage = ({
                   options={availableCategories}
                 />
               </div>
+              
+              <div className="flex items-center gap-2 pt-5">
+                  <div className="flex items-center h-full">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input 
+                          type="checkbox" 
+                          checked={form.is_recurring} 
+                          onChange={e => setForm({...form, is_recurring: e.target.checked})}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="text-sm text-slate-700 font-medium whitespace-nowrap">Recorrente?</span>
+                    </label>
+                  </div>
+                  {form.is_recurring && (
+                     <div className="w-24">
+                       <input
+                          type="number"
+                          placeholder="Meses"
+                          value={form.recurring_months} 
+                          onChange={e => setForm({...form, recurring_months: e.target.value})}
+                          className="border border-slate-300 rounded-lg p-2 bg-white text-slate-800 text-sm w-full outline-none focus:ring-2 focus:ring-blue-500"
+                       />
+                     </div>
+                  )}
+              </div>
             </div>
-            
-            <div className="lg:col-span-1 flex flex-col pt-1">
-              <label className="flex items-center gap-2 cursor-pointer mb-2">
-                  <input 
-                    type="checkbox" 
-                    checked={form.is_recurring} 
-                    onChange={e => setForm({...form, is_recurring: e.target.checked})}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="text-sm text-slate-700 font-medium">Recorrente?</span>
-              </label>
-              {form.is_recurring && (
-                 <Input 
-                    label="Por quantos meses?" 
-                    type="number" 
-                    placeholder="Ex: 12" 
-                    value={form.recurring_months} 
-                    onChange={e => setForm({...form, recurring_months: e.target.value})}
-                 />
-              )}
-            </div>
+
             <div className="lg:col-span-4 flex justify-end mt-2">
               <Button disabled={isLoading} className="w-full md:w-auto px-8">
                 {isLoading ? 'Salvando...' : 'Adicionar Movimentação'}
@@ -282,7 +310,7 @@ const TransactionsPage = ({
                     {new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                     {t.is_recurring && (
                         <div className="flex flex-col mt-1">
-                           <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200 w-fit">FIXA</span>
+                           <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200 w-fit uppercase font-bold tracking-wide">RECORRENTE</span>
                            {t.recurring_months && t.recurring_months > 0 && (
                               <span className="text-[10px] text-slate-400 mt-0.5">{t.recurring_months} meses</span>
                            )}
@@ -452,17 +480,7 @@ const DashboardPage = ({
   return (
     <div className="space-y-6">
        {/* Month Selector */}
-       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6">
-        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-slate-100 rounded-full">
-           &lt; Anterior
-        </button>
-        <h2 className="text-xl font-bold text-slate-800 capitalize flex items-center gap-2">
-           <IconCalendar className="w-5 h-5 text-slate-500"/> {getMonthLabel(currentDate)}
-        </h2>
-        <button onClick={() => onMonthChange(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-slate-100 rounded-full">
-           Próximo &gt;
-        </button>
-      </div>
+       <MonthSelector currentDate={currentDate} onChange={onMonthChange} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="border-l-4 border-l-emerald-500">
@@ -939,7 +957,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
          <Card className="w-full max-w-md">
             <div className="text-center mb-6">
                <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  DuoFin
+                  Finova
                </h1>
                <p className="text-slate-500">Thiago & Marcela</p>
             </div>
@@ -1524,7 +1542,7 @@ const App = () => {
         <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              DuoFin
+              Finova
             </h1>
             <p className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Thiago & Marcela</p>
           </div>
