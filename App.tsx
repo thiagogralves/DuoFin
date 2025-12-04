@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
@@ -33,10 +34,32 @@ const MonthSelector = ({ currentDate, onChange }: { currentDate: Date, onChange:
    const nextDate = new Date(currentDate);
    nextDate.setMonth(currentDate.getMonth() + 1);
 
+   const handleDateInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.value) {
+         const [y, m] = e.target.value.split('-');
+         const newDate = new Date(Number(y), Number(m) - 1, 1);
+         onChange(newDate);
+      }
+   };
+
+   // Formata YYYY-MM para o input value
+   const inputValue = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
    return (
-      <div className="flex flex-col items-center gap-1 mb-6">
-        <div className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1 rounded-full border border-slate-200">
-           {currentDate.getFullYear()}
+      <div className="flex flex-col items-center gap-2 mb-6">
+        <div className="flex items-center gap-2">
+            <div className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1 rounded-full border border-slate-200">
+               {currentDate.getFullYear()}
+            </div>
+            <label className="cursor-pointer bg-white border border-slate-200 p-1 rounded-full text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-colors relative" title="Selecionar Mês/Ano">
+               <IconCalendar className="w-4 h-4" />
+               <input 
+                  type="month" 
+                  value={inputValue}
+                  onChange={handleDateInput}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+               />
+            </label>
         </div>
 
         <div className="flex justify-center items-center gap-2 md:gap-4 bg-white p-2 rounded-full shadow-sm border border-slate-100 max-w-sm mx-auto select-none">
@@ -47,7 +70,7 @@ const MonthSelector = ({ currentDate, onChange }: { currentDate: Date, onChange:
              {getMonthName(prevDate)}
           </button>
           
-          <div className="bg-slate-100 text-slate-800 font-bold px-6 py-2 rounded-full capitalize shadow-inner text-sm md:text-base border border-slate-200">
+          <div className="bg-slate-100 text-slate-800 font-bold px-6 py-2 rounded-full capitalize shadow-inner text-sm md:text-base border border-slate-200 min-w-[120px] text-center">
              {getMonthName(currentDate)}
           </div>
           
@@ -311,12 +334,14 @@ const TransactionsPage = ({
             </thead>
             <tbody>
               {filteredTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
-                <tr key={t.id} className={`border-b hover:bg-opacity-80 transition-colors ${t.is_paid ? 'bg-emerald-50' : 'bg-white'}`}>
+                <tr key={t.id} className={`border-b hover:bg-opacity-80 transition-colors ${t.is_paid ? 'bg-emerald-100' : 'bg-white'}`}>
                   <td className="p-4 whitespace-nowrap">
                     {new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                     {t.is_recurring && (
                         <div className="flex flex-col mt-1">
-                           <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200 w-fit uppercase font-bold tracking-wide">RECORRENTE</span>
+                           <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded border border-indigo-200 w-fit uppercase font-bold tracking-wide">
+                              <IconRefresh className="w-3 h-3 inline mr-1" /> RECORRENTE
+                           </span>
                            {t.recurring_months && t.recurring_months > 0 && (
                               <span className="text-[10px] text-slate-400 mt-0.5">{t.recurring_months} meses</span>
                            )}
@@ -467,6 +492,13 @@ const DashboardPage = ({
     return { income, expenses, balance: income - expenses };
   }, [filteredTransactions]);
 
+  // Pending Transactions for the Card
+  const pendingTransactions = useMemo(() => {
+     return filteredTransactions.filter(t => t.type === 'despesa' && !t.is_paid).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [filteredTransactions]);
+  
+  const totalPending = pendingTransactions.reduce((acc, t) => acc + t.amount, 0);
+
   // Calculate spending per category for Budgets
   const spendingByCategory = useMemo(() => {
     const spending: Record<string, number> = {};
@@ -534,6 +566,44 @@ const DashboardPage = ({
           <CategoryChart transactions={filteredTransactions} hidden={hidden} />
         </Card>
       </div>
+
+      {/* Contas Pendentes */}
+      <Card className="border-l-4 border-l-amber-500">
+         <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+               <IconClock className="w-5 h-5 text-amber-500" /> Contas Pendentes ({getMonthName(currentDate)})
+            </h3>
+            <span className="text-lg font-bold text-rose-600">{formatCurrency(totalPending, hidden)}</span>
+         </div>
+         {pendingTransactions.length > 0 ? (
+            <div className="overflow-x-auto">
+               <table className="w-full text-sm">
+                  <thead>
+                     <tr className="text-slate-500 text-left border-b border-slate-100">
+                        <th className="pb-2 font-medium">Vencimento</th>
+                        <th className="pb-2 font-medium">Descrição</th>
+                        <th className="pb-2 font-medium">Categoria</th>
+                        <th className="pb-2 font-medium text-right">Valor</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     {pendingTransactions.map(t => (
+                        <tr key={t.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                           <td className="py-2 text-slate-600">
+                              {new Date(t.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                           </td>
+                           <td className="py-2 font-medium text-slate-800">{t.description}</td>
+                           <td className="py-2 text-slate-500">{t.category}</td>
+                           <td className="py-2 text-right font-bold text-slate-700">{formatCurrency(t.amount, hidden)}</td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+            </div>
+         ) : (
+            <p className="text-slate-400 text-center py-4">Tudo pago! Nenhuma conta pendente neste mês.</p>
+         )}
+      </Card>
 
       {/* Budgets / Metas Section */}
       <Card>
