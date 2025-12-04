@@ -10,9 +10,10 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 interface ChartsProps {
   transactions: Transaction[];
+  hidden?: boolean;
 }
 
-export const MonthlyChart = ({ transactions }: ChartsProps) => {
+export const MonthlyChart = ({ transactions, hidden = false }: ChartsProps) => {
   // Aggregate data by month
   const data = React.useMemo(() => {
     const monthlyData: Record<string, { name: string; Receitas: number; Despesas: number }> = {};
@@ -33,8 +34,6 @@ export const MonthlyChart = ({ transactions }: ChartsProps) => {
       }
     });
 
-    // Sort by date (simple string compare works for YYYY-MM structure usually, but let's be cleaner if we had more logic)
-    // For now, object keys iteration order isn't guaranteed, so let's map and sort.
     return Object.keys(monthlyData)
       .sort() // Works for YYYY-MM
       .map(key => monthlyData[key]);
@@ -56,11 +55,11 @@ export const MonthlyChart = ({ transactions }: ChartsProps) => {
             fontSize={12} 
             tickLine={false} 
             axisLine={false} 
-            tickFormatter={(val) => new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short', style: 'currency', currency: 'BRL' }).format(val)} 
+            tickFormatter={(val) => hidden ? '••••' : new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short', style: 'currency', currency: 'BRL' }).format(val)} 
           />
           <Tooltip 
             cursor={{ fill: '#f1f5f9' }}
-            formatter={(value: number) => formatCurrency(value)}
+            formatter={(value: number) => formatCurrency(value, hidden)}
             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
           />
           <Legend />
@@ -72,7 +71,7 @@ export const MonthlyChart = ({ transactions }: ChartsProps) => {
   );
 };
 
-export const CategoryChart = ({ transactions }: ChartsProps) => {
+export const CategoryChart = ({ transactions, hidden = false }: ChartsProps) => {
   const data = React.useMemo(() => {
     const expenses = transactions.filter(t => t.type === 'despesa');
     const catData: Record<string, number> = {};
@@ -107,7 +106,7 @@ export const CategoryChart = ({ transactions }: ChartsProps) => {
             ))}
           </Pie>
           <Tooltip 
-             formatter={(value: number) => formatCurrency(value)}
+             formatter={(value: number) => formatCurrency(value, hidden)}
              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
           />
           <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }}/>
