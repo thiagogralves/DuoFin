@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import { Transaction } from '../types';
 import { formatCurrency } from './UI';
@@ -9,11 +9,12 @@ import { formatCurrency } from './UI';
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
 
 interface ChartsProps {
-  transactions: Transaction[];
+  transactions?: Transaction[];
+  data?: any[];
   hidden?: boolean;
 }
 
-export const MonthlyChart = ({ transactions, hidden = false }: ChartsProps) => {
+export const MonthlyChart = ({ transactions = [], hidden = false }: ChartsProps) => {
   // Aggregate data by month
   const data = React.useMemo(() => {
     const monthlyData: Record<string, { name: string; Receitas: number; Despesas: number }> = {};
@@ -48,7 +49,7 @@ export const MonthlyChart = ({ transactions, hidden = false }: ChartsProps) => {
           data={data}
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.5} />
           <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
           <YAxis 
             stroke="#64748b" 
@@ -58,9 +59,9 @@ export const MonthlyChart = ({ transactions, hidden = false }: ChartsProps) => {
             tickFormatter={(val) => hidden ? '••••' : new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short', style: 'currency', currency: 'BRL' }).format(val)} 
           />
           <Tooltip 
-            cursor={{ fill: '#f1f5f9' }}
+            cursor={{ fill: 'transparent' }}
             formatter={(value: number) => formatCurrency(value, hidden)}
-            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'var(--tooltip-bg, #fff)', color: 'var(--tooltip-color, #000)' }}
           />
           <Legend />
           <Bar dataKey="Receitas" fill="#10b981" radius={[4, 4, 0, 0]} />
@@ -71,7 +72,7 @@ export const MonthlyChart = ({ transactions, hidden = false }: ChartsProps) => {
   );
 };
 
-export const CategoryChart = ({ transactions, hidden = false }: ChartsProps) => {
+export const CategoryChart = ({ transactions = [], hidden = false }: ChartsProps) => {
   const data = React.useMemo(() => {
     const expenses = transactions.filter(t => t.type === 'despesa');
     const catData: Record<string, number> = {};
@@ -117,3 +118,39 @@ export const CategoryChart = ({ transactions, hidden = false }: ChartsProps) => 
     </div>
   );
 };
+
+export const EvolutionChart = ({ data, hidden = false }: ChartsProps) => {
+   if (!data || data.length === 0) return <div className="text-center text-slate-400 py-10">Histórico insuficiente</div>;
+ 
+   return (
+     <div className="h-60 w-full">
+       <ResponsiveContainer width="100%" height="100%">
+         <AreaChart
+           data={data}
+           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+         >
+           <defs>
+             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+               <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+               <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+             </linearGradient>
+           </defs>
+           <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+           <YAxis 
+             stroke="#64748b" 
+             fontSize={12} 
+             tickLine={false} 
+             axisLine={false} 
+             tickFormatter={(val) => hidden ? '••••' : new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short', style: 'currency', currency: 'BRL' }).format(val)} 
+           />
+           <Tooltip 
+             formatter={(value: number) => formatCurrency(value, hidden)}
+             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+           />
+           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.5} />
+           <Area type="monotone" dataKey="value" stroke="#10b981" fillOpacity={1} fill="url(#colorValue)" />
+         </AreaChart>
+       </ResponsiveContainer>
+     </div>
+   );
+ };
