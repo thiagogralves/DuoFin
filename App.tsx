@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
-  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff, IconCheck, IconClock, IconSearch, IconDownload, IconFileText, IconSun, IconMoon, IconActivity
+  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff, IconCheck, IconClock, IconSearch, IconDownload, IconFileText, IconSun, IconMoon, IconActivity, IconTrophy, IconStar, IconBarChartHorizontal
 } from './components/Icons';
 import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
-import { MonthlyChart, CategoryChart, EvolutionChart } from './components/Charts';
-import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category, PaymentMethod } from './types';
+import { MonthlyChart, CategoryChart, EvolutionChart, SemestralChart, LifestyleChart, UserDistChart, TopOffendersChart } from './components/Charts';
+import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category, PaymentMethod, SavingsGoal } from './types';
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
 import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
@@ -346,7 +346,7 @@ const TransactionsPage = ({
                placeholder="Buscar (nome ou categoria)..." 
                value={searchTerm}
                onChange={e => setSearchTerm(e.target.value)}
-               className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-800 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+               className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
          </div>
          <div className="flex gap-2">
@@ -528,7 +528,10 @@ const DashboardPage = ({
   transactions, 
   stats,
   budgets,
+  categories,
   onUpdateBudget,
+  savingsGoals,
+  onUpdateSavings,
   currentDate,
   onMonthChange,
   currentUser,
@@ -537,13 +540,17 @@ const DashboardPage = ({
   transactions: Transaction[]; 
   stats: any;
   budgets: Budget[];
+  categories: Category[];
   onUpdateBudget: (cat: string, limit: number) => void;
+  savingsGoals: SavingsGoal[];
+  onUpdateSavings: (name: string, target: number, current: number) => void;
   currentDate: Date;
   onMonthChange: (d: Date) => void;
   currentUser: User;
   hidden: boolean;
 }) => {
   const [editingBudget, setEditingBudget] = useState<{cat: string, val: string} | null>(null);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | {name: '', target: '', current: ''} | null>(null);
 
   // Filter Transactions by Selected Month AND User
   const filteredTransactions = transactions.filter(t => {
@@ -608,6 +615,14 @@ const DashboardPage = ({
       onUpdateBudget(editingBudget.cat, Number(editingBudget.val));
       setEditingBudget(null);
     }
+  };
+
+  const handleGoalSave = () => {
+     if (editingGoal) {
+        // @ts-ignore
+        onUpdateSavings(editingGoal.name, Number(editingGoal.target_amount || editingGoal.target), Number(editingGoal.current_amount || editingGoal.current));
+        setEditingGoal(null);
+     }
   };
 
   return (
@@ -680,18 +695,7 @@ const DashboardPage = ({
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Fluxo Diário</h3>
-          <MonthlyChart transactions={filteredTransactions} hidden={hidden} />
-        </Card>
-        <Card>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Gastos por Categoria</h3>
-          <CategoryChart transactions={filteredTransactions} hidden={hidden} />
-        </Card>
-      </div>
-
-      {/* Contas Pendentes */}
+      {/* Contas Pendentes - Moved Up */}
       <Card className="border-l-4 border-l-amber-500 bg-white dark:bg-slate-800">
          <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -727,6 +731,62 @@ const DashboardPage = ({
          ) : (
             <p className="text-slate-400 text-center py-4">Tudo pago! Nenhuma conta pendente neste mês.</p>
          )}
+      </Card>
+      
+      {/* --- GRÁFICOS ORGANIZADOS EM GRID 2X3 --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         <Card>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Fluxo Diário</h3>
+            <MonthlyChart transactions={filteredTransactions} hidden={hidden} />
+         </Card>
+         <Card>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Gastos por Categoria</h3>
+            <CategoryChart transactions={filteredTransactions} hidden={hidden} />
+         </Card>
+         <Card>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+               <IconBarChartHorizontal className="w-5 h-5 text-blue-500" /> Semestral (Histórico)
+            </h3>
+            <SemestralChart transactions={transactions} hidden={hidden} />
+         </Card>
+         <Card>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+               <IconStar className="w-5 h-5 text-yellow-500" /> Estilo de Vida
+            </h3>
+            <LifestyleChart transactions={filteredTransactions} categories={categories} hidden={hidden} />
+         </Card>
+         <Card>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+               <IconActivity className="w-5 h-5 text-purple-500" /> Distribuição ({currentUser})
+            </h3>
+            <UserDistChart transactions={filteredTransactions} hidden={hidden} />
+         </Card>
+         <Card>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+               <IconTrendingDown className="w-5 h-5 text-red-500" /> Top 5 Ofensores
+            </h3>
+            <TopOffendersChart transactions={filteredTransactions} hidden={hidden} />
+         </Card>
+      </div>
+      
+      {/* --- METAS E SONHOS --- */}
+      <Card className="border-l-4 border-l-purple-500 bg-white dark:bg-slate-800">
+         <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+               <IconTrophy className="w-5 h-5 text-purple-500" /> Metas de Sonhos (Savings)
+            </h3>
+            <Button variant="secondary" className="text-xs py-1 px-3" onClick={() => setEditingGoal({name: '', target: '', current: ''})}>
+               + Novo Sonho
+            </Button>
+         </div>
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {savingsGoals.filter(g => currentUser === 'Ambos' ? true : g.user === currentUser || g.user === 'Ambos').map(goal => (
+               <div key={goal.id} className="cursor-pointer" onClick={() => setEditingGoal(goal)}>
+                  <ProgressBar label={goal.name} current={goal.current_amount} max={goal.target_amount} hidden={hidden} />
+               </div>
+            ))}
+            {savingsGoals.length === 0 && <p className="text-slate-400 text-sm">Nenhum sonho cadastrado ainda.</p>}
+         </div>
       </Card>
 
       {/* Budgets / Metas Section */}
@@ -771,6 +831,48 @@ const DashboardPage = ({
             )}
          </div>
       </Card>
+      
+      {/* Patrimônio Investido (Last) */}
+      <Card>
+          <div className="flex justify-between items-center mb-4">
+             <h3 className="text-xl font-bold text-slate-800 dark:text-white">Patrimônio Investido ({currentUser})</h3>
+             <IconActivity className="w-6 h-6 text-emerald-500" />
+          </div>
+          <div className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-2">
+            {formatCurrency(stats.invested, hidden)}
+          </div>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Total acumulado em investimentos e reservas.</p>
+      </Card>
+
+      {/* Modal Sonhos */}
+      <Modal isOpen={!!editingGoal} onClose={() => setEditingGoal(null)} title="Meta de Sonho">
+         <div className="space-y-4">
+            <Input 
+               label="Nome do Sonho" 
+               // @ts-ignore
+               value={editingGoal?.name || ''} 
+               // @ts-ignore
+               onChange={e => setEditingGoal({...editingGoal, name: e.target.value})}
+            />
+            <Input 
+               label="Valor Alvo (R$)" 
+               type="number"
+               // @ts-ignore
+               value={editingGoal?.target_amount || editingGoal?.target || ''} 
+               // @ts-ignore
+               onChange={e => setEditingGoal({...editingGoal, target: e.target.value})}
+            />
+            <Input 
+               label="Valor Atual Guardado (R$)" 
+               type="number"
+               // @ts-ignore
+               value={editingGoal?.current_amount || editingGoal?.current || ''} 
+               // @ts-ignore
+               onChange={e => setEditingGoal({...editingGoal, current: e.target.value})}
+            />
+            <Button onClick={handleGoalSave} className="w-full">Salvar Sonho</Button>
+         </div>
+      </Modal>
 
       <Modal isOpen={!!editingBudget} onClose={() => setEditingBudget(null)} title="Definir Meta de Gasto Mensal">
          <div className="space-y-4">
@@ -784,17 +886,6 @@ const DashboardPage = ({
             <Button onClick={handleBudgetSave} className="w-full">Salvar Meta</Button>
          </div>
       </Modal>
-      
-      <Card>
-          <div className="flex justify-between items-center mb-4">
-             <h3 className="text-xl font-bold text-slate-800 dark:text-white">Patrimônio Investido ({currentUser})</h3>
-             <IconActivity className="w-6 h-6 text-emerald-500" />
-          </div>
-          <div className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-2">
-            {formatCurrency(stats.invested, hidden)}
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Total acumulado em investimentos e reservas.</p>
-      </Card>
     </div>
   );
 };
@@ -1013,6 +1104,7 @@ const SettingsPage = ({
   onAddCategory,
   onUpdateCategory,
   onDeleteCategory,
+  onToggleEssential,
   onRestoreDefaults,
   isDarkMode,
   toggleDarkMode
@@ -1021,6 +1113,7 @@ const SettingsPage = ({
   onAddCategory: (name: string, type: string) => void;
   onUpdateCategory: (id: string, oldName: string, newName: string) => void;
   onDeleteCategory: (id: string, name: string) => void;
+  onToggleEssential: (id: string, current: boolean) => void;
   onRestoreDefaults: () => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -1133,9 +1226,19 @@ const SettingsPage = ({
                 <div key={c.id} className="flex justify-between items-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 rounded-lg hover:shadow-sm transition-shadow group">
                    <div className="flex items-center gap-3">
                       {c.is_system && <span title="Categoria do Sistema"><IconShield className="w-4 h-4 text-slate-300 dark:text-slate-600" /></span>}
+                      {c.is_essential && <span title="Categoria Essencial"><IconStar className="w-4 h-4 text-yellow-500" /></span>}
                       <span className="text-slate-800 dark:text-slate-200 font-medium">{c.name}</span>
                    </div>
                    <div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                      {c.type === 'despesa' && (
+                         <button
+                            onClick={() => onToggleEssential(c.id, !!c.is_essential)}
+                            className={`p-1 rounded ${c.is_essential ? 'text-yellow-500' : 'text-slate-300 hover:text-yellow-500'}`}
+                            title={c.is_essential ? 'Remover de Essencial' : 'Marcar como Essencial'}
+                         >
+                            <IconStar className="w-4 h-4" />
+                         </button>
+                      )}
                       <button 
                          onClick={() => setEditingCat({id: c.id, name: c.name, oldName: c.name})}
                          className="text-slate-400 hover:text-blue-500 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30"
@@ -1199,7 +1302,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
    };
 
    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
          <Card className="w-full max-w-md">
             <div className="text-center mb-6">
                <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -1249,6 +1352,7 @@ const App = () => {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const [isLoading, setIsLoading] = useState(false);
@@ -1315,6 +1419,7 @@ const App = () => {
       const { data: transData } = await supabase.from('transactions').select('*').order('date', { ascending: false });
       const { data: invData } = await supabase.from('investments').select('*');
       const { data: catData } = await supabase.from('categories').select('*');
+      const { data: saveData } = await supabase.from('savings_goals').select('*');
       
       // Migration Logic
       const existingNames = (catData || []).map((c: any) => c.name);
@@ -1347,10 +1452,16 @@ const App = () => {
       setTransactions(transData || []);
       setInvestments(mappedInvestments);
       if (budData) setBudgets(budData);
+      if (saveData) setSavingsGoals(saveData);
 
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao carregar dados. Verifique conexão.');
+      // Ignorar erros de tabela inexistente no início
+      if (err.message && (err.message.includes('savings_goals') || err.message.includes('404'))) {
+         // Silently fail for new features
+      } else {
+         setError('Erro ao carregar dados. Verifique conexão.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -1360,13 +1471,7 @@ const App = () => {
     fetchData();
   }, [isAuthenticated]);
 
-  // Actions (Add, Update, Delete) are defined inside specific components for cleaner App.tsx, 
-  // but passed down. For brevity, reusing logic structure.
-  
-  // Need to redefine wrappers to pass state updates
   const handleAddTransaction = async (t: Omit<Transaction, 'id'>) => {
-     // ... same logic as before, just ensuring state updates ...
-     // Re-implementing briefly for context
      const transactionsToInsert = [];
      const months = (t.is_recurring && t.recurring_months && t.recurring_months > 0) ? t.recurring_months : 1;
      for (let i = 0; i < months; i++) {
@@ -1407,9 +1512,14 @@ const App = () => {
      await supabase.from('categories').delete().eq('id', id);
      setCategories(prev => prev.filter(c => c.id !== id));
   };
+  const handleToggleEssential = async (id: string, current: boolean) => {
+     const { error } = await supabase.from('categories').update({ is_essential: !current }).eq('id', id);
+     if (!error) {
+        setCategories(prev => prev.map(c => c.id === id ? { ...c, is_essential: !current } : c));
+     }
+  };
   const handleRestoreDefaults = async () => {
      if (!confirm('Restaurar padrões?')) return;
-     // ... logic ...
      alert('Reinicie o app para aplicar.');
   };
 
@@ -1426,6 +1536,17 @@ const App = () => {
      } else {
         const { data } = await supabase.from('budgets').insert([{ category: cat, limit_amount: lim }]).select();
         if (data) setBudgets(prev => [...prev, data[0]]);
+     }
+  };
+
+  const handleUpdateSavings = async (name: string, target: number, current: number) => {
+     const existing = savingsGoals.find(g => g.name === name);
+     if (existing) {
+        const { error } = await supabase.from('savings_goals').update({ target_amount: target, current_amount: current }).eq('id', existing.id);
+        if(!error) setSavingsGoals(prev => prev.map(g => g.id === existing.id ? {...g, target_amount: target, current_amount: current} : g));
+     } else {
+        const { data } = await supabase.from('savings_goals').insert([{ name, target_amount: target, current_amount: current, user: 'Ambos' }]).select();
+        if(data) setSavingsGoals(prev => [...prev, data[0]]);
      }
   };
 
@@ -1454,7 +1575,7 @@ const App = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardPage transactions={transactions} stats={stats} budgets={budgets} onUpdateBudget={handleUpdateBudget} currentDate={currentDate} onMonthChange={setCurrentDate} currentUser={currentUser} hidden={isPrivacyMode} />;
+        return <DashboardPage transactions={transactions} stats={stats} budgets={budgets} categories={categories} onUpdateBudget={handleUpdateBudget} savingsGoals={savingsGoals} onUpdateSavings={handleUpdateSavings} currentDate={currentDate} onMonthChange={setCurrentDate} currentUser={currentUser} hidden={isPrivacyMode} />;
       case 'transactions':
         return <TransactionsPage transactions={transactions} onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={handleDeleteTransaction} onToggleStatus={handleToggleStatus} isLoading={isLoading} categories={categories} currentDate={currentDate} onMonthChange={setCurrentDate} onGenerateRecurring={() => {}} currentUser={currentUser} hidden={isPrivacyMode} />;
       case 'investments':
@@ -1462,7 +1583,7 @@ const App = () => {
       case 'advisor':
         return <AdvisorPage transactions={transactions} investments={investments} currentUser={currentUser} />;
       case 'settings':
-        return <SettingsPage categories={categories} onAddCategory={handleAddCategory} onUpdateCategory={handleUpdateCategory} onDeleteCategory={handleDeleteCategory} onRestoreDefaults={handleRestoreDefaults} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />;
+        return <SettingsPage categories={categories} onAddCategory={handleAddCategory} onUpdateCategory={handleUpdateCategory} onDeleteCategory={handleDeleteCategory} onToggleEssential={handleToggleEssential} onRestoreDefaults={handleRestoreDefaults} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />;
       default: return null;
     }
   };
@@ -1471,7 +1592,7 @@ const App = () => {
   if (!isAuthenticated) return <LoginPage onLogin={handleLogin} />;
 
   const getMainBackground = () => {
-    if (isDarkMode) return 'dark bg-slate-900 text-slate-100'; // Dark Mode Root Class
+    if (isDarkMode) return 'dark bg-slate-900 text-slate-100';
     if (currentUser === 'Thiago') return 'bg-blue-50/50';
     if (currentUser === 'Marcela') return 'bg-pink-50/50';
     return 'bg-slate-50';
@@ -1521,7 +1642,7 @@ const App = () => {
           
           <div className="flex items-center gap-2">
             <div className="flex bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-               <button onClick={() => setCurrentUser('Ambos')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Ambos' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>Geral</button>
+               <button onClick={() => setCurrentUser('Ambos')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Ambos' ? 'bg-white dark:bg-white text-slate-900 shadow-md border border-slate-200' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>Geral</button>
                <button onClick={() => setCurrentUser('Thiago')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Thiago' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'}`}>Thiago</button>
                <button onClick={() => setCurrentUser('Marcela')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Marcela' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-pink-50 dark:hover:bg-pink-900/30'}`}>Marcela</button>
             </div>
@@ -1549,7 +1670,7 @@ const App = () => {
 };
 
 const NavButton = ({ active, onClick, icon, label, special = false }: { active: boolean; onClick: () => void; icon: React.ReactElement; label: string; special?: boolean; }) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${active ? special ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' : 'bg-slate-900 dark:bg-blue-700 text-white shadow-lg shadow-slate-200 dark:shadow-none' : special ? 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+  <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${active ? special ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' : 'bg-white dark:bg-blue-700 text-slate-900 dark:text-white border border-slate-200 dark:border-none shadow-sm dark:shadow-none' : special ? 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
     {React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" })}
     {label}
   </button>
