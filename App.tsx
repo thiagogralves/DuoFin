@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
-  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit
+  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff
 } from './components/Icons';
 import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
 import { MonthlyChart, CategoryChart } from './components/Charts';
@@ -28,7 +28,8 @@ const TransactionsPage = ({
   currentDate,
   onMonthChange,
   onGenerateRecurring,
-  currentUser
+  currentUser,
+  hidden
 }: { 
   transactions: Transaction[]; 
   onAdd: (t: Omit<Transaction, 'id'>) => void; 
@@ -40,6 +41,7 @@ const TransactionsPage = ({
   onMonthChange: (d: Date) => void;
   onGenerateRecurring: () => void;
   currentUser: User;
+  hidden: boolean;
 }) => {
   const [form, setForm] = useState({
     description: '',
@@ -261,7 +263,7 @@ const TransactionsPage = ({
                   </td>
                   <td className="p-4 text-slate-500 whitespace-nowrap">{t.category}</td>
                   <td className={`p-4 text-right font-bold whitespace-nowrap ${t.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {t.type === 'receita' ? '+' : '-'} {formatCurrency(t.amount)}
+                    {t.type === 'receita' ? '+' : '-'} {formatCurrency(t.amount, hidden)}
                   </td>
                   <td className="p-4 text-center flex items-center justify-center gap-2">
                     <button onClick={() => setEditingTransaction(t)} disabled={isLoading} className="text-slate-400 hover:text-blue-500 transition-colors disabled:opacity-50">
@@ -331,7 +333,8 @@ const DashboardPage = ({
   onUpdateBudget,
   currentDate,
   onMonthChange,
-  currentUser
+  currentUser,
+  hidden
 }: { 
   transactions: Transaction[]; 
   stats: any;
@@ -340,6 +343,7 @@ const DashboardPage = ({
   currentDate: Date;
   onMonthChange: (d: Date) => void;
   currentUser: User;
+  hidden: boolean;
 }) => {
   const [editingBudget, setEditingBudget] = useState<{cat: string, val: string} | null>(null);
 
@@ -394,7 +398,7 @@ const DashboardPage = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">Saldo do Mês</p>
-              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.balance)}</h3>
+              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.balance, hidden)}</h3>
             </div>
             <div className="p-2 bg-emerald-100 rounded-full text-emerald-600">
                 <IconWallet />
@@ -405,7 +409,7 @@ const DashboardPage = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">Receitas</p>
-              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.income)}</h3>
+              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.income, hidden)}</h3>
             </div>
             <div className="p-2 bg-blue-100 rounded-full text-blue-600">
                 <IconTrendingUp />
@@ -416,7 +420,7 @@ const DashboardPage = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">Despesas</p>
-              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.expenses)}</h3>
+              <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(monthlyStats.expenses, hidden)}</h3>
             </div>
             <div className="p-2 bg-rose-100 rounded-full text-rose-600">
                 <IconTrendingDown />
@@ -428,11 +432,11 @@ const DashboardPage = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <h3 className="text-lg font-bold text-slate-800 mb-4">Fluxo Diário (Mês)</h3>
-          <MonthlyChart transactions={filteredTransactions} />
+          <MonthlyChart transactions={filteredTransactions} hidden={hidden} />
         </Card>
         <Card>
           <h3 className="text-lg font-bold text-slate-800 mb-4">Gastos por Categoria</h3>
-          <CategoryChart transactions={filteredTransactions} />
+          <CategoryChart transactions={filteredTransactions} hidden={hidden} />
         </Card>
       </div>
 
@@ -460,13 +464,14 @@ const DashboardPage = ({
                         <ProgressBar 
                            label={cat} 
                            current={spendingByCategory[cat]} 
-                           max={limit} 
+                           max={limit}
+                           hidden={hidden} 
                         />
                      ) : (
                         <div className="flex justify-between items-center p-2 rounded hover:bg-slate-50 border border-transparent hover:border-slate-100 mb-2">
                            <span className="text-slate-700 font-medium">{cat}</span>
                            <span className="text-xs text-blue-500 opacity-0 group-hover:opacity-100">Definir Meta +</span>
-                           <span className="text-slate-500 font-bold">{formatCurrency(spendingByCategory[cat])}</span>
+                           <span className="text-slate-500 font-bold">{formatCurrency(spendingByCategory[cat], hidden)}</span>
                         </div>
                      )}
                   </div>
@@ -497,7 +502,7 @@ const DashboardPage = ({
             <p className="opacity-80">Total Acumulado</p>
           </div>
           <div className="text-3xl font-bold text-emerald-400">
-            {formatCurrency(stats.invested)}
+            {formatCurrency(stats.invested, hidden)}
           </div>
       </div>
     </div>
@@ -510,13 +515,15 @@ const InvestmentsPage = ({
   onAdd, 
   onDelete,
   isLoading,
-  currentUser
+  currentUser,
+  hidden
 }: { 
   investments: Investment[]; 
   onAdd: (i: Omit<Investment, 'id' | 'history'>, initialAmount: number) => void; 
   onDelete: (id: string) => void;
   isLoading: boolean;
   currentUser: User;
+  hidden: boolean;
 }) => {
   const [form, setForm] = useState({
     name: '',
@@ -554,7 +561,7 @@ const InvestmentsPage = ({
               <h3 className="font-semibold text-lg">Reserva de Emergência</h3>
             </div>
             <p className="text-3xl font-bold">
-              {formatCurrency(emergencyFund.reduce((acc, i) => acc + i.currentAmount, 0))}
+              {formatCurrency(emergencyFund.reduce((acc, i) => acc + i.currentAmount, 0), hidden)}
             </p>
             <p className="text-sm opacity-75 mt-2">Proteção para imprevistos</p>
          </Card>
@@ -564,7 +571,7 @@ const InvestmentsPage = ({
               <h3 className="font-semibold text-lg">Investimentos Gerais</h3>
             </div>
             <p className="text-3xl font-bold">
-              {formatCurrency(generalInvestments.reduce((acc, i) => acc + i.currentAmount, 0))}
+              {formatCurrency(generalInvestments.reduce((acc, i) => acc + i.currentAmount, 0), hidden)}
             </p>
             <p className="text-sm opacity-75 mt-2">Foco no longo prazo</p>
          </Card>
@@ -619,7 +626,7 @@ const InvestmentsPage = ({
             </div>
             <h4 className="font-bold text-lg text-slate-800">{inv.name}</h4>
             <p className="text-sm text-slate-500 mb-4">Gerido por: {inv.user}</p>
-            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(inv.currentAmount)}</p>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(inv.currentAmount, hidden)}</p>
             <div className="mt-4 flex gap-2">
                <Button variant="secondary" className="text-xs py-1 px-2 w-full" onClick={() => alert('Para simplificar, para editar o saldo delete e recrie por enquanto.')}>+ Aportar</Button>
             </div>
@@ -893,6 +900,12 @@ const App = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'investments' | 'advisor' | 'settings'>('dashboard');
   const [currentUser, setCurrentUser] = useState<User>('Ambos'); // New State for Profile Context
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile Menu State
+  
+  // Privacy Mode
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+  const [unlockModalOpen, setUnlockModalOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState(false);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -919,6 +932,25 @@ const App = () => {
   const handleNavClick = (tab: typeof activeTab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
+  };
+  
+  const togglePrivacy = () => {
+     if (isPrivacyMode) {
+        setUnlockModalOpen(true);
+     } else {
+        setIsPrivacyMode(true);
+     }
+  };
+  
+  const handleUnlock = () => {
+     if (unlockPassword === APP_PASSWORD) {
+        setIsPrivacyMode(false);
+        setUnlockModalOpen(false);
+        setUnlockPassword('');
+        setUnlockError(false);
+     } else {
+        setUnlockError(true);
+     }
   };
 
   // Load Data from Supabase
@@ -1344,6 +1376,7 @@ const App = () => {
               currentDate={currentDate}
               onMonthChange={setCurrentDate}
               currentUser={currentUser}
+              hidden={isPrivacyMode}
            />
         );
       case 'transactions':
@@ -1359,6 +1392,7 @@ const App = () => {
               onMonthChange={setCurrentDate}
               onGenerateRecurring={generateRecurringTransactions}
               currentUser={currentUser}
+              hidden={isPrivacyMode}
            />
         );
       case 'investments':
@@ -1369,6 +1403,7 @@ const App = () => {
             onDelete={deleteInvestment} 
             isLoading={isLoading} 
             currentUser={currentUser}
+            hidden={isPrivacyMode}
           />
         );
       case 'advisor':
@@ -1477,29 +1512,55 @@ const App = () => {
             </p>
           </div>
           
-          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
-             <button 
-               onClick={() => setCurrentUser('Ambos')}
-               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Ambos' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-             >
-                Geral
-             </button>
-             <button 
-               onClick={() => setCurrentUser('Thiago')}
-               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Thiago' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-blue-50'}`}
-             >
-                Thiago
-             </button>
-             <button 
-               onClick={() => setCurrentUser('Marcela')}
-               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Marcela' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-500 hover:bg-pink-50'}`}
-             >
-                Marcela
-             </button>
+          <div className="flex items-center gap-2">
+            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+               <button 
+                 onClick={() => setCurrentUser('Ambos')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Ambos' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+               >
+                  Geral
+               </button>
+               <button 
+                 onClick={() => setCurrentUser('Thiago')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Thiago' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-blue-50'}`}
+               >
+                  Thiago
+               </button>
+               <button 
+                 onClick={() => setCurrentUser('Marcela')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentUser === 'Marcela' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-500 hover:bg-pink-50'}`}
+               >
+                  Marcela
+               </button>
+            </div>
+            
+            <button 
+               onClick={togglePrivacy}
+               className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-colors"
+               title={isPrivacyMode ? "Mostrar Valores" : "Ocultar Valores"}
+            >
+               {isPrivacyMode ? <IconEyeOff className="w-5 h-5" /> : <IconEye className="w-5 h-5" />}
+            </button>
           </div>
         </header>
         {renderContent()}
       </main>
+      
+      {/* Unlock Privacy Modal */}
+      <Modal isOpen={unlockModalOpen} onClose={() => { setUnlockModalOpen(false); setUnlockPassword(''); setUnlockError(false); }} title="Desbloquear Visualização">
+         <div className="space-y-4">
+            <p className="text-sm text-slate-600">Digite a senha do aplicativo para visualizar os valores.</p>
+            <Input 
+               label="Senha" 
+               type="password"
+               value={unlockPassword} 
+               onChange={e => { setUnlockPassword(e.target.value); setUnlockError(false); }}
+               placeholder="Digite a senha..."
+            />
+            {unlockError && <p className="text-red-500 text-sm">Senha incorreta.</p>}
+            <Button onClick={handleUnlock} className="w-full">Desbloquear</Button>
+         </div>
+      </Modal>
     </div>
   );
 };
