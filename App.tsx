@@ -92,29 +92,29 @@ const MonthSelector = ({ currentDate, onChange }: { currentDate: Date, onChange:
 const TransactionsPage = ({ 
   transactions, 
   onAdd, 
-  onUpdate,
-  onDelete,
-  onToggleStatus,
-  isLoading,
-  categories,
-  currentDate,
-  onMonthChange,
-  onGenerateRecurring,
-  currentUser,
-  hidden
+  onUpdate, 
+  onDelete, 
+  onToggleStatus, 
+  isLoading, 
+  categories, 
+  currentDate, 
+  onMonthChange, 
+  onGenerateRecurring, 
+  currentUser, 
+  hidden 
 }: { 
   transactions: Transaction[]; 
   onAdd: (t: Omit<Transaction, 'id'>) => void; 
-  onUpdate: (id: string, t: Partial<Transaction>) => void;
-  onDelete: (id: string) => void;
-  onToggleStatus: (id: string, currentStatus: boolean) => void;
-  isLoading: boolean;
-  categories: Category[];
-  currentDate: Date;
-  onMonthChange: (d: Date) => void;
-  onGenerateRecurring: () => void;
-  currentUser: User;
-  hidden: boolean;
+  onUpdate: (id: string, t: Partial<Transaction>) => void; 
+  onDelete: (id: string) => void; 
+  onToggleStatus: (id: string, currentStatus: boolean) => void; 
+  isLoading: boolean; 
+  categories: Category[]; 
+  currentDate: Date; 
+  onMonthChange: (d: Date) => void; 
+  onGenerateRecurring: () => void; 
+  currentUser: User; 
+  hidden: boolean; 
 }) => {
   const [form, setForm] = useState({
     description: '',
@@ -560,6 +560,11 @@ const DashboardPage = ({
     return dateMatch && userMatch;
   });
 
+  // Filter Transactions by User ONLY (for History Chart)
+  const userHistoryTransactions = useMemo(() => {
+     return transactions.filter(t => currentUser === 'Ambos' ? true : t.user === currentUser);
+  }, [transactions, currentUser]);
+
   // Calculate Previous Month Stats for Comparison
   const prevMonthStats = useMemo(() => {
      const prevDate = new Date(currentDate);
@@ -747,7 +752,7 @@ const DashboardPage = ({
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                <IconBarChartHorizontal className="w-5 h-5 text-blue-500" /> Semestral (Histórico)
             </h3>
-            <SemestralChart transactions={transactions} hidden={hidden} />
+            <SemestralChart transactions={userHistoryTransactions} hidden={hidden} />
          </Card>
          <Card>
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
