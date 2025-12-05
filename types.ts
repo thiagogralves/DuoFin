@@ -67,3 +67,10 @@ export interface DashboardStats {
   investments: number;
   emergency: number;
 }
+
+export interface AdviceHistoryItem {
+  id: string;
+  created_at: string; // Data da geração
+  week_of: string; // Data da segunda-feira correspondente (YYYY-MM-DD)
+  content: string;
+}
