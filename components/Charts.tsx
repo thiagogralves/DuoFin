@@ -14,6 +14,7 @@ interface ChartsProps {
   categories?: Category[]; // Necessário para Lifestyle Chart
   data?: any[];
   hidden?: boolean;
+  currentDate?: Date; // Adicionado para suportar navegação temporal
 }
 
 export const MonthlyChart = ({ transactions = [], hidden = false }: ChartsProps) => {
@@ -158,13 +159,14 @@ export const EvolutionChart = ({ data, hidden = false }: ChartsProps) => {
 
 // --- NOVOS GRÁFICOS ---
 
-export const SemestralChart = ({ transactions = [], hidden = false }: ChartsProps) => {
+export const SemestralChart = ({ transactions = [], hidden = false, currentDate }: ChartsProps) => {
    const data = React.useMemo(() => {
-     // Pegar data de hoje e voltar 6 meses
-     const today = new Date();
+     // Usa a data fornecida ou a data atual
+     const referenceDate = currentDate ? new Date(currentDate) : new Date();
+     
      const months = [];
      for(let i=5; i>=0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
         months.push({ 
            key: `${d.getFullYear()}-${d.getMonth()}`, 
            label: d.toLocaleDateString('pt-BR', { month: 'short' }),
@@ -183,7 +185,7 @@ export const SemestralChart = ({ transactions = [], hidden = false }: ChartsProp
        }
      });
      return months;
-   }, [transactions]);
+   }, [transactions, currentDate]);
  
    return (
      <div className="h-60 w-full">
