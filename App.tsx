@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
@@ -84,6 +85,116 @@ const MonthSelector = ({ currentDate, onChange }: { currentDate: Date, onChange:
         </div>
       </div>
    );
+};
+
+// --- Extracted Form Component to fix Focus Loss ---
+const AddTransactionForm = ({
+  form,
+  setForm,
+  onSubmit,
+  isLoading,
+  availableCategories
+}: {
+  form: any;
+  setForm: (f: any) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  isLoading: boolean;
+  availableCategories: string[];
+}) => {
+  return (
+    <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+      <div className="lg:col-span-2">
+        <Input 
+          label="Descrição" 
+          value={form.description} 
+          onChange={e => setForm({...form, description: e.target.value})} 
+          placeholder="Ex: Compra Mercado"
+        />
+      </div>
+      <Input 
+        label="Valor (R$)" 
+        type="number" 
+        value={form.amount} 
+        onChange={e => setForm({...form, amount: e.target.value})} 
+        placeholder="0,00"
+      />
+      <div className="flex flex-col gap-1 w-full">
+        <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Data</label>
+        <input 
+          type="date" 
+          value={form.date} 
+          onChange={e => setForm({...form, date: e.target.value})}
+          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
+        />
+      </div>
+      <div className="flex flex-col gap-1 w-full">
+        <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Tipo</label>
+        <select 
+          value={form.type} 
+          onChange={e => setForm({...form, type: e.target.value as TransactionType})}
+          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
+        >
+          <option value="receita">Receita</option>
+          <option value="despesa">Despesa</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-1 w-full">
+        <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Pagamento</label>
+        <select 
+          value={form.payment_method} 
+          onChange={e => setForm({...form, payment_method: e.target.value as PaymentMethod})}
+          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
+        >
+          <option value="pix">Pix</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="cartao">Cartão</option>
+          <option value="boleto">Contas à Pagar</option>
+        </select>
+      </div>
+      
+      <div className="lg:col-span-2 flex items-center gap-4">
+        <div className="flex-1">
+          <Select 
+            label="Categoria"
+            value={form.category}
+            onChange={e => setForm({...form, category: e.target.value})}
+            options={availableCategories}
+          />
+        </div>
+        
+        <div className="flex items-center gap-2 pt-5">
+            <div className="flex items-center h-full">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={form.is_recurring} 
+                    onChange={e => setForm({...form, is_recurring: e.target.checked})}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">Recorrente?</span>
+              </label>
+            </div>
+            {form.is_recurring && (
+               <div className="w-24">
+                 <input
+                    type="number"
+                    placeholder="Meses"
+                    value={form.recurring_months} 
+                    onChange={e => setForm({...form, recurring_months: e.target.value})}
+                    className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm w-full outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+               </div>
+            )}
+        </div>
+      </div>
+
+      <div className="lg:col-span-4 flex justify-end mt-2">
+        <Button disabled={isLoading} className="w-full md:w-auto px-8">
+          {isLoading ? 'Salvando...' : 'Adicionar Movimentação'}
+        </Button>
+      </div>
+    </form>
+  );
 };
 
 // --- Sub-components ---
@@ -176,11 +287,6 @@ const TransactionsPage = ({
      }
   };
 
-  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newType = e.target.value as TransactionType;
-    setForm({ ...form, type: newType });
-  };
-
   const availableCategories = useMemo(() => {
     return categories
        .filter(c => c.type === form.type)
@@ -238,102 +344,6 @@ const TransactionsPage = ({
     document.body.removeChild(link);
   };
 
-  // Shared Add Form Render Function (Prevents remounting and focus loss)
-  const renderTransactionForm = () => (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-      <div className="lg:col-span-2">
-        <Input 
-          label="Descrição" 
-          value={form.description} 
-          onChange={e => setForm({...form, description: e.target.value})} 
-          placeholder="Ex: Compra Mercado"
-        />
-      </div>
-      <Input 
-        label="Valor (R$)" 
-        type="number" 
-        value={form.amount} 
-        onChange={e => setForm({...form, amount: e.target.value})} 
-        placeholder="0,00"
-      />
-      <div className="flex flex-col gap-1 w-full">
-        <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Data</label>
-        <input 
-          type="date" 
-          value={form.date} 
-          onChange={e => setForm({...form, date: e.target.value})}
-          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
-        />
-      </div>
-      <div className="flex flex-col gap-1 w-full">
-        <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Tipo</label>
-        <select 
-          value={form.type} 
-          onChange={handleTypeChange}
-          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
-        >
-          <option value="receita">Receita</option>
-          <option value="despesa">Despesa</option>
-        </select>
-      </div>
-      <div className="flex flex-col gap-1 w-full">
-        <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Pagamento</label>
-        <select 
-          value={form.payment_method} 
-          onChange={e => setForm({...form, payment_method: e.target.value as PaymentMethod})}
-          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
-        >
-          <option value="pix">Pix</option>
-          <option value="dinheiro">Dinheiro</option>
-          <option value="cartao">Cartão</option>
-          <option value="boleto">Contas à Pagar</option>
-        </select>
-      </div>
-      
-      <div className="lg:col-span-2 flex items-center gap-4">
-        <div className="flex-1">
-          <Select 
-            label="Categoria"
-            value={form.category}
-            onChange={e => setForm({...form, category: e.target.value})}
-            options={availableCategories}
-          />
-        </div>
-        
-        <div className="flex items-center gap-2 pt-5">
-            <div className="flex items-center h-full">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input 
-                    type="checkbox" 
-                    checked={form.is_recurring} 
-                    onChange={e => setForm({...form, is_recurring: e.target.checked})}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="text-sm text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">Recorrente?</span>
-              </label>
-            </div>
-            {form.is_recurring && (
-               <div className="w-24">
-                 <input
-                    type="number"
-                    placeholder="Meses"
-                    value={form.recurring_months} 
-                    onChange={e => setForm({...form, recurring_months: e.target.value})}
-                    className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm w-full outline-none focus:ring-2 focus:ring-blue-500"
-                 />
-               </div>
-            )}
-        </div>
-      </div>
-
-      <div className="lg:col-span-4 flex justify-end mt-2">
-        <Button disabled={isLoading} className="w-full md:w-auto px-8">
-          {isLoading ? 'Salvando...' : 'Adicionar Movimentação'}
-        </Button>
-      </div>
-    </form>
-  );
-
   return (
     <div className="space-y-6">
       {!searchTerm && <MonthSelector currentDate={currentDate} onChange={onMonthChange} />}
@@ -369,7 +379,13 @@ const TransactionsPage = ({
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <IconPlus className="w-5 h-5" /> Nova Movimentação ({currentUser})
           </h2>
-          {renderTransactionForm()}
+          <AddTransactionForm 
+            form={form} 
+            setForm={setForm} 
+            onSubmit={handleSubmit} 
+            isLoading={isLoading} 
+            availableCategories={availableCategories} 
+          />
         </Card>
       )}
 
@@ -385,7 +401,13 @@ const TransactionsPage = ({
 
       {/* Mobile Add Modal */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title={`Nova Movimentação (${currentUser})`}>
-         {renderTransactionForm()}
+         <AddTransactionForm 
+            form={form} 
+            setForm={setForm} 
+            onSubmit={handleSubmit} 
+            isLoading={isLoading} 
+            availableCategories={availableCategories} 
+         />
       </Modal>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -752,7 +774,7 @@ const DashboardPage = ({
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                <IconBarChartHorizontal className="w-5 h-5 text-blue-500" /> Semestral (Histórico)
             </h3>
-            <SemestralChart transactions={userHistoryTransactions} hidden={hidden} />
+            <SemestralChart transactions={userHistoryTransactions} hidden={hidden} currentDate={currentDate} />
          </Card>
          <Card>
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
@@ -1320,6 +1342,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha de Acesso</label>
                   <input 
                      type="password" 
+                     name="finova_access_key"
                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                      value={password}
                      onChange={e => { setPassword(e.target.value); setError(false); }}
