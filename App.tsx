@@ -238,8 +238,8 @@ const TransactionsPage = ({
     document.body.removeChild(link);
   };
 
-  // Shared Add Form Component
-  const AddTransactionForm = () => (
+  // Shared Add Form Render Function (Prevents remounting and focus loss)
+  const renderTransactionForm = () => (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
       <div className="lg:col-span-2">
         <Input 
@@ -369,7 +369,7 @@ const TransactionsPage = ({
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <IconPlus className="w-5 h-5" /> Nova Movimentação ({currentUser})
           </h2>
-          <AddTransactionForm />
+          {renderTransactionForm()}
         </Card>
       )}
 
@@ -385,7 +385,7 @@ const TransactionsPage = ({
 
       {/* Mobile Add Modal */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title={`Nova Movimentação (${currentUser})`}>
-         <AddTransactionForm />
+         {renderTransactionForm()}
       </Modal>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -1143,7 +1143,7 @@ const SettingsPage = ({
   };
 
   const handleLogout = () => {
-     localStorage.removeItem('app_authenticated');
+     sessionStorage.removeItem('app_authenticated');
      window.location.reload();
   };
   
@@ -1315,7 +1315,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
                </h1>
                <p className="text-slate-500">Thiago & Marcela</p>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
                <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha de Acesso</label>
                   <input 
@@ -1325,6 +1325,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
                      onChange={e => { setPassword(e.target.value); setError(false); }}
                      placeholder="Digite a senha..."
                      autoFocus
+                     autoComplete="new-password"
                   />
                </div>
                {error && <p className="text-red-500 text-sm">Senha incorreta.</p>}
@@ -1364,10 +1365,11 @@ const App = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-     const auth = localStorage.getItem('app_authenticated');
+     // Session storage instead of local storage ensures logout on browser close
+     const auth = sessionStorage.getItem('app_authenticated');
      if (auth === 'true') setIsAuthenticated(true);
      
-     // Check Dark Mode preference
+     // Check Dark Mode preference (keep local as preference)
      const darkPref = localStorage.getItem('app_dark_mode');
      if (darkPref === 'true') setIsDarkMode(true);
      
@@ -1381,7 +1383,7 @@ const App = () => {
   };
 
   const handleLogin = () => {
-     localStorage.setItem('app_authenticated', 'true');
+     sessionStorage.setItem('app_authenticated', 'true');
      setIsAuthenticated(true);
   };
 
