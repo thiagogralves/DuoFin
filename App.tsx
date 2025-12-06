@@ -689,8 +689,8 @@ const TransactionsPage = ({
           />
        </Modal>
  
-       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-         <div className="overflow-x-auto">
+       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden w-full">
+         <div className="overflow-x-auto w-full">
            <table className="w-full text-sm text-left">
              <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-xs">
                <tr>
@@ -1603,6 +1603,7 @@ const App = () => {
   const [hidden, setHidden] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Data State
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1738,7 +1739,6 @@ const App = () => {
      const { error } = await supabase.from('categories').update({ name: newName }).eq('id', id);
      if (!error) {
         setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
-        // Update transactions with old category name? Optional, but good practice
      }
   };
 
@@ -1753,7 +1753,6 @@ const App = () => {
   };
 
   const handleUpdateBudget = async (category: string, limit_amount: number) => {
-     // Check if budget exists
      const existing = budgets.find(b => b.category === category);
      if (existing) {
         const { error } = await supabase.from('budgets').update({ limit_amount }).eq('id', existing.id);
@@ -1777,78 +1776,90 @@ const App = () => {
   
   const handleRestoreDefaults = async () => {
      if(!confirm('Recriar categorias padrão?')) return;
-     // Simple implementation: just add missing ones
-     // ... (omitted for brevity, assume manual addition for now or simple loop)
   };
 
-  // Derived Stats
   const stats = {
      invested: investments.reduce((acc, i) => acc + i.currentAmount, 0)
+  };
+
+  const handleNavClick = (tabId: any) => {
+     setActiveTab(tabId);
+     setIsSidebarOpen(false); // Close sidebar on mobile on click
   };
 
   if (!isAuthenticated) return <LoginPage onLogin={() => setIsAuthenticated(true)} />;
 
   const NavItem = ({ id, icon: Icon, label }: any) => (
      <button 
-       onClick={() => setActiveTab(id)}
-       className={`flex flex-col md:flex-row items-center md:gap-3 w-full p-2 md:p-3 rounded-xl transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 dark:hover:text-slate-200'}`}
+       onClick={() => handleNavClick(id)}
+       className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 dark:hover:text-slate-200'}`}
      >
-       <Icon className="w-6 h-6 md:w-5 md:h-5" />
-       <span className="text-[10px] md:text-sm font-medium md:font-medium">{label}</span>
+       <Icon className="w-5 h-5" />
+       <span className="text-sm font-medium">{label}</span>
      </button>
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors pb-24 md:pb-0 md:pl-64 font-sans">
-       {/* Desktop Sidebar */}
-       <aside className="hidden md:flex flex-col w-64 fixed left-0 top-0 bottom-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-6 z-20">
-          <div className="flex items-center gap-3 mb-10 text-blue-600 dark:text-blue-400">
-             <IconWallet className="w-8 h-8" />
-             <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Finova</h1>
-          </div>
-          
-          <nav className="space-y-2 flex-1">
-             <NavItem id="dashboard" icon={IconPieChart} label="Dashboard" />
-             <NavItem id="transactions" icon={IconList} label="Movimentações" />
-             <NavItem id="investments" icon={IconTrendingUp} label="Investimentos" />
-             <NavItem id="advisor" icon={IconBrain} label="Consultor IA" />
-             <NavItem id="settings" icon={IconSettings} label="Ajustes" />
-          </nav>
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors md:pl-64 font-sans overflow-x-hidden">
+       {/* Sidebar / Drawer */}
+       <>
+         {/* Mobile Overlay */}
+         {isSidebarOpen && (
+            <div 
+               className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+               onClick={() => setIsSidebarOpen(false)}
+            />
+         )}
 
-          <div className="mt-auto pt-6 border-t border-slate-100 dark:border-slate-700">
-             <div className="flex items-center gap-3 px-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold">
-                   {currentUser.charAt(0)}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                   <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">Olá, {currentUser}</p>
-                   <button onClick={() => setIsAuthenticated(false)} className="text-xs text-slate-400 hover:text-red-500">Sair</button>
-                </div>
-             </div>
-          </div>
-       </aside>
+         {/* Sidebar Content */}
+         <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-6 transform transition-transform duration-300 ease-in-out md:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="flex items-center justify-between mb-10 text-blue-600 dark:text-blue-400">
+               <div className="flex items-center gap-3">
+                  <IconWallet className="w-8 h-8" />
+                  <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Finova</h1>
+               </div>
+               <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600">
+                  <IconClose className="w-6 h-6" />
+               </button>
+            </div>
+            
+            <nav className="space-y-2 flex-1">
+               <NavItem id="dashboard" icon={IconPieChart} label="Dashboard" />
+               <NavItem id="transactions" icon={IconList} label="Movimentações" />
+               <NavItem id="investments" icon={IconTrendingUp} label="Investimentos" />
+               <NavItem id="advisor" icon={IconBrain} label="Consultor IA" />
+               <NavItem id="settings" icon={IconSettings} label="Ajustes" />
+            </nav>
 
-       {/* Mobile Bottom Nav */}
-       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-2 z-30 grid grid-cols-5 gap-1 shadow-[0_-5px_10px_rgba(0,0,0,0.05)]">
-          <NavItem id="dashboard" icon={IconPieChart} label="Dash" />
-          <NavItem id="transactions" icon={IconList} label="Movi" />
-          <NavItem id="investments" icon={IconTrendingUp} label="Inv" />
-          <NavItem id="advisor" icon={IconBrain} label="IA" />
-          <NavItem id="settings" icon={IconSettings} label="Config" />
-       </nav>
+            <div className="mt-auto pt-6 border-t border-slate-100 dark:border-slate-700">
+               <div className="flex items-center gap-3 px-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold">
+                     {currentUser.charAt(0)}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                     <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">Olá, {currentUser}</p>
+                     <button onClick={() => setIsAuthenticated(false)} className="text-xs text-slate-400 hover:text-red-500">Sair</button>
+                  </div>
+               </div>
+            </div>
+         </aside>
+       </>
 
        {/* Main Content */}
-       <main className="p-4 md:p-8 max-w-7xl mx-auto">
-          <header className="flex justify-between items-center mb-8">
-             <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white capitalize">
+       <main className="p-4 md:p-8 max-w-7xl mx-auto w-full">
+          <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+             <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start relative">
+                <button 
+                   onClick={() => setIsSidebarOpen(true)}
+                   className="md:hidden absolute left-0 p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                   <IconMenu className="w-6 h-6" />
+                </button>
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white capitalize text-center w-full md:w-auto md:text-left">
                    {activeTab === 'advisor' ? 'Consultor Financeiro IA' : activeTab === 'dashboard' ? 'Visão Geral' : activeTab === 'transactions' ? 'Movimentações' : activeTab === 'investments' ? 'Carteira' : 'Configurações'}
                 </h1>
-                <p className="text-slate-500 text-sm md:text-base">
-                   Gestão inteligente para {currentUser === 'Ambos' ? 'o Casal' : currentUser}
-                </p>
              </div>
-             <div className="flex items-center gap-2 md:gap-4">
+             <div className="flex items-center gap-2 md:gap-4 justify-center w-full md:w-auto">
                 <button 
                    onClick={() => setHidden(!hidden)} 
                    className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
