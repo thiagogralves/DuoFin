@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
@@ -448,11 +447,12 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
                   {/* CSS Fix for readable text in light mode applied via prose classes + specific overrides */}
                   <div className="p-6 md:p-8">
                       <div 
-                        className="prose prose-slate max-w-none 
+                        className="prose prose-slate dark:prose-invert max-w-none 
+                                   text-slate-600 dark:text-slate-100
                                    prose-headings:text-slate-800 dark:prose-headings:text-white 
-                                   prose-p:text-slate-600 dark:prose-p:text-slate-300 
+                                   prose-p:text-slate-600 dark:prose-p:text-slate-100 
                                    prose-strong:text-slate-800 dark:prose-strong:text-white
-                                   prose-li:text-slate-600 dark:prose-li:text-slate-300"
+                                   prose-li:text-slate-600 dark:prose-li:text-slate-100"
                         dangerouslySetInnerHTML={{ 
                            __html: selectedReport.content
                               .replace(/\n/g, '<br/>')
@@ -1604,6 +1604,11 @@ const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Unlock Modal State
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState('');
 
   // Data State
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1777,6 +1782,27 @@ const App = () => {
   const handleRestoreDefaults = async () => {
      if(!confirm('Recriar categorias padrão?')) return;
   };
+  
+  const handleToggleHidden = () => {
+    if (hidden) {
+       setIsUnlockModalOpen(true);
+       setUnlockPassword('');
+       setUnlockError('');
+    } else {
+       setHidden(true);
+    }
+  };
+
+  const handleUnlockSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (unlockPassword === APP_PASSWORD) {
+         setHidden(false);
+         setIsUnlockModalOpen(false);
+         setUnlockError('');
+      } else {
+         setUnlockError('Senha incorreta');
+      }
+  };
 
   const stats = {
      invested: investments.reduce((acc, i) => acc + i.currentAmount, 0)
@@ -1861,7 +1887,7 @@ const App = () => {
              </div>
              <div className="flex items-center gap-2 md:gap-4 justify-center w-full md:w-auto">
                 <button 
-                   onClick={() => setHidden(!hidden)} 
+                   onClick={handleToggleHidden} 
                    className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
                    title={hidden ? "Mostrar Valores" : "Ocultar Valores"}
                 >
@@ -1945,6 +1971,21 @@ const App = () => {
              )}
           </div>
        </main>
+       
+       {/* Unlock Modal */}
+       <Modal isOpen={isUnlockModalOpen} onClose={() => setIsUnlockModalOpen(false)} title="Desbloquear Visualização">
+           <form onSubmit={handleUnlockSubmit} className="space-y-4">
+              <Input 
+                 label="Senha" 
+                 type="password" 
+                 value={unlockPassword} 
+                 onChange={e => setUnlockPassword(e.target.value)}
+                 placeholder="Digite sua senha..."
+              />
+              {unlockError && <p className="text-red-500 text-sm font-bold">{unlockError}</p>}
+              <Button className="w-full">Confirmar</Button>
+           </form>
+       </Modal>
     </div>
   );
 };
