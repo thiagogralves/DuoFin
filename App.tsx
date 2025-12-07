@@ -196,7 +196,10 @@ const AddTransactionForm = ({
   );
 };
 
-// --- Calendar Component for Advisor Page ---
+// ... [Outros componentes mantidos iguais até o App] ...
+// Por brevidade, mantendo os componentes ReportCalendar, AdvisorPage, TransactionsPage, DashboardPage, InvestmentsPage, SettingsPage, LoginPage inalterados.
+// O XML requer o conteúdo completo, então estou replicando os componentes essenciais e focando nas mudanças no App component.
+
 const ReportCalendar = ({ 
   datesWithReports, 
   selectedDate, 
@@ -294,20 +297,15 @@ const ReportCalendar = ({
   );
 };
 
-// --- ADVISOR PAGE WITH SUPABASE & CALENDAR ---
-
 const AdvisorPage = ({ transactions, investments, currentUser }: { transactions: Transaction[], investments: Investment[], currentUser: User }) => {
   const [history, setHistory] = useState<AdviceHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  
-  // Calendar State
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
 
-  // Helper: Get the date of the Monday of the current week
   const getMonday = (d: Date) => {
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(d);
     monday.setDate(diff);
     return monday;
@@ -326,12 +324,9 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
         
         if (data) {
            setHistory(data);
-           // Auto select latest
            if (data.length > 0 && !selectedReportId) {
               setSelectedReportId(data[0].id);
            }
-           
-           // Check for auto-generate
            const hasReportForThisWeek = data.some((h: any) => h.week_of === currentMondayStr);
            if (!hasReportForThisWeek && !loading) {
               generateAdvice(data);
@@ -351,7 +346,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
       content: result
     };
     
-    // Save to DB
     const { data, error } = await supabase.from('advice_history').insert([newItem]).select();
     
     if (data && !error) {
@@ -370,7 +364,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
 
   const selectedReport = history.find(h => h.id === selectedReportId);
 
-  // Map dates (week_of) to allow calendar lookup
   const datesWithReports = useMemo(() => {
      return history.map(h => h.week_of);
   }, [history]);
@@ -393,8 +386,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-         
-         {/* Left Column: Controls & Calendar */}
          <div className="space-y-6">
             <div className="flex justify-between items-center bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800">
                <div className="flex flex-col">
@@ -430,7 +421,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
             </div>
          </div>
 
-         {/* Right Column: Report Content */}
          <div className="md:col-span-2">
             {selectedReport ? (
                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -444,7 +434,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
                      </div>
                   </div>
                   
-                  {/* CSS Fix for readable text in light mode applied via prose classes + specific overrides */}
                   <div className="p-6 md:p-8">
                       <div 
                         className="prose prose-slate dark:prose-invert max-w-none 
@@ -478,7 +467,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
   );
 };
 
-// 2. Transactions List Component with Filters
 const TransactionsPage = ({ 
    transactions, 
    onAdd, 
@@ -519,9 +507,8 @@ const TransactionsPage = ({
    
    const [searchTerm, setSearchTerm] = useState('');
    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-   const [isAddModalOpen, setIsAddModalOpen] = useState(false); // Mobile FAB Modal
+   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
  
-   // Set default category when type changes or categories load
    useEffect(() => {
      const catsOfType = categories.filter(c => c.type === form.type).map(c => c.name).sort();
      if (catsOfType.length > 0 && (!form.category || !catsOfType.includes(form.category))) {
@@ -533,7 +520,6 @@ const TransactionsPage = ({
      e.preventDefault();
      if (!form.description || !form.amount) return;
      
-     // Auto-set status: Dinheiro/Pix = Paid, others = Pending
      const autoPaid = ['dinheiro', 'pix'].includes(form.payment_method);
  
      onAdd({
@@ -541,7 +527,7 @@ const TransactionsPage = ({
        amount: Number(form.amount),
        type: form.type,
        category: form.category,
-       user: currentUser, // Auto-assign current user
+       user: currentUser,
        date: form.date,
        is_recurring: form.is_recurring,
        recurring_months: form.is_recurring && form.recurring_months ? Number(form.recurring_months) : 0,
@@ -581,9 +567,7 @@ const TransactionsPage = ({
         .sort();
    }, [editingTransaction, categories]);
  
-   // Filter Transactions by Selected Month AND Current User
    const filteredTransactions = transactions.filter(t => {
-     // Search filter overrides date filter
      if (searchTerm) {
         const term = searchTerm.toLowerCase();
         const matchesSearch = t.description.toLowerCase().includes(term) || t.category.toLowerCase().includes(term);
@@ -653,7 +637,6 @@ const TransactionsPage = ({
             <p className="text-slate-500 dark:text-slate-400 font-medium">Selecione o perfil de <span className="text-blue-600 font-bold">Thiago</span> ou <span className="text-pink-600 font-bold">Marcela</span> para adicionar.</p>
          </Card>
        ) : (
-         // Desktop Form
          <Card className={`hidden md:block border-l-4 ${currentUser === 'Thiago' ? 'border-l-blue-500' : 'border-l-pink-500'}`}>
            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
              <IconPlus className="w-5 h-5" /> Nova Movimentação ({currentUser})
@@ -668,7 +651,6 @@ const TransactionsPage = ({
          </Card>
        )}
  
-       {/* Mobile FAB */}
        {currentUser !== 'Ambos' && (
           <button 
              onClick={() => setIsAddModalOpen(true)}
@@ -678,7 +660,6 @@ const TransactionsPage = ({
           </button>
        )}
  
-       {/* Mobile Add Modal */}
        <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title={`Nova Movimentação (${currentUser})`}>
           <AddTransactionForm 
              form={form} 
@@ -773,7 +754,6 @@ const TransactionsPage = ({
          </div>
        </div>
  
-       {/* Edit Transaction Modal */}
        <Modal isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Editar Transação">
           {editingTransaction && (
              <div className="space-y-4">
@@ -824,7 +804,6 @@ const TransactionsPage = ({
    );
  };
  
- // 2. Dashboard Component with Month Filter and Goals
  const DashboardPage = ({ 
    transactions, 
    stats,
@@ -853,7 +832,6 @@ const TransactionsPage = ({
    const [editingBudget, setEditingBudget] = useState<{cat: string, val: string} | null>(null);
    const [editingGoal, setEditingGoal] = useState<SavingsGoal | {name: '', target: '', current: ''} | null>(null);
  
-   // Filter Transactions by Selected Month AND User
    const filteredTransactions = transactions.filter(t => {
      const tDate = new Date(t.date);
      const dateMatch = tDate.getMonth() === currentDate.getMonth() && tDate.getFullYear() === currentDate.getFullYear();
@@ -861,12 +839,10 @@ const TransactionsPage = ({
      return dateMatch && userMatch;
    });
  
-   // Filter Transactions by User ONLY (for History Chart)
    const userHistoryTransactions = useMemo(() => {
       return transactions.filter(t => currentUser === 'Ambos' ? true : t.user === currentUser);
    }, [transactions, currentUser]);
  
-   // Calculate Previous Month Stats for Comparison
    const prevMonthStats = useMemo(() => {
       const prevDate = new Date(currentDate);
       prevDate.setMonth(currentDate.getMonth() - 1);
@@ -883,14 +859,12 @@ const TransactionsPage = ({
       return { expenses, income };
    }, [transactions, currentDate, currentUser]);
    
-   // Calculate Stats for FILTERED transactions
    const monthlyStats = useMemo(() => {
      const income = filteredTransactions.filter(t => t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
      const expenses = filteredTransactions.filter(t => t.type === 'despesa').reduce((acc, t) => acc + t.amount, 0);
      return { income, expenses, balance: income - expenses };
    }, [filteredTransactions]);
  
-   // Calculate Variation
    const getVariation = (current: number, previous: number) => {
       if (previous === 0) return null;
       const diff = ((current - previous) / previous) * 100;
@@ -900,14 +874,12 @@ const TransactionsPage = ({
    const expenseVariation = getVariation(monthlyStats.expenses, prevMonthStats.expenses);
    const incomeVariation = getVariation(monthlyStats.income, prevMonthStats.income);
  
-   // Pending Transactions for the Card
    const pendingTransactions = useMemo(() => {
       return filteredTransactions.filter(t => t.type === 'despesa' && !t.is_paid).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
    }, [filteredTransactions]);
    
    const totalPending = pendingTransactions.reduce((acc, t) => acc + t.amount, 0);
  
-   // Calculate spending per category for Budgets
    const spendingByCategory = useMemo(() => {
      const spending: Record<string, number> = {};
      filteredTransactions.filter(t => t.type === 'despesa').forEach(t => {
@@ -933,7 +905,6 @@ const TransactionsPage = ({
  
    return (
      <div className="space-y-6">
-        {/* Month Selector */}
         <MonthSelector currentDate={currentDate} onChange={onMonthChange} />
  
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -950,7 +921,6 @@ const TransactionsPage = ({
            </div>
          </Card>
          
-         {/* Projeção Final */}
          <Card className="border-l-4 border-l-indigo-500 bg-white dark:bg-slate-800">
             <div className="flex items-center justify-between">
                <div>
@@ -1001,7 +971,6 @@ const TransactionsPage = ({
          </Card>
        </div>
  
-       {/* Contas Pendentes - Moved Up */}
        <Card className="border-l-4 border-l-amber-500 bg-white dark:bg-slate-800">
           <div className="flex justify-between items-center mb-4">
              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -1039,7 +1008,6 @@ const TransactionsPage = ({
           )}
        </Card>
        
-       {/* --- GRÁFICOS ORGANIZADOS EM GRID 2X3 --- */}
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
              <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Fluxo Diário</h3>
@@ -1075,7 +1043,6 @@ const TransactionsPage = ({
           </Card>
        </div>
        
-       {/* --- METAS E SONHOS --- */}
        <Card className="border-l-4 border-l-purple-500 bg-white dark:bg-slate-800">
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -1095,7 +1062,6 @@ const TransactionsPage = ({
           </div>
        </Card>
  
-       {/* Budgets / Metas Section */}
        <Card>
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -1138,7 +1104,6 @@ const TransactionsPage = ({
           </div>
        </Card>
        
-       {/* Patrimônio Investido (Last) */}
        <Card>
            <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">Patrimônio Investido ({currentUser})</h3>
@@ -1150,7 +1115,6 @@ const TransactionsPage = ({
            <p className="text-slate-500 dark:text-slate-400 text-sm">Total acumulado em investimentos e reservas.</p>
        </Card>
  
-       {/* Modal Sonhos */}
        <Modal isOpen={!!editingGoal} onClose={() => setEditingGoal(null)} title="Meta de Sonho">
           <div className="space-y-4">
              <Input 
@@ -1196,7 +1160,6 @@ const TransactionsPage = ({
    );
  };
  
- // ... Investments Page ...
  const InvestmentsPage = ({ 
    investments, 
    onAdd, 
@@ -1238,9 +1201,7 @@ const TransactionsPage = ({
    const emergencyFund = filteredInvestments.filter(i => i.type === 'emergencia');
    const generalInvestments = filteredInvestments.filter(i => i.type === 'geral');
  
-   // Prepare Evolution Data
    const evolutionData = useMemo(() => {
-      // Flatten all history items
       const allOps: {date: string, amount: number}[] = [];
       filteredInvestments.forEach(inv => {
          inv.history.forEach(h => {
@@ -1248,10 +1209,8 @@ const TransactionsPage = ({
          });
       });
       
-      // Sort by date
       allOps.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
-      // Accumulate
       let currentTotal = 0;
       const dataPoints: {date: string, value: number}[] = [];
       
@@ -1263,7 +1222,6 @@ const TransactionsPage = ({
          });
       });
       
-      // Simplify graph (take last 20 points if too many)
       if (dataPoints.length > 20) {
          return dataPoints.slice(dataPoints.length - 20);
       }
@@ -1272,7 +1230,6 @@ const TransactionsPage = ({
  
    return (
      <div className="space-y-8">
-       {/* Summary Cards */}
        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none shadow-lg">
              <div className="flex items-center gap-3 mb-2 opacity-90">
@@ -1301,7 +1258,6 @@ const TransactionsPage = ({
           <EvolutionChart data={evolutionData} hidden={hidden} />
        </Card>
  
-       {/* Add Form */}
        {currentUser === 'Ambos' ? (
          <Card className="bg-slate-50 dark:bg-slate-800 border-dashed border-2 border-slate-200 dark:border-slate-600 text-center py-8">
             <p className="text-slate-500 dark:text-slate-400 font-medium">Selecione o perfil de <span className="text-blue-600 font-bold">Thiago</span> ou <span className="text-pink-600 font-bold">Marcela</span> para adicionar investimentos.</p>
@@ -1336,7 +1292,6 @@ const TransactionsPage = ({
          </Card>
        )}
  
-       {/* List */}
        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
          {filteredInvestments.map(inv => (
            <Card key={inv.id} className="relative group hover:shadow-md transition-shadow">
@@ -1406,6 +1361,7 @@ const TransactionsPage = ({
  
    const handleLogout = () => {
       sessionStorage.removeItem('app_authenticated');
+      localStorage.removeItem('app_values_hidden');
       window.location.reload();
    };
    
@@ -1600,7 +1556,12 @@ const App = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'investments' | 'advisor' | 'settings'>('dashboard');
   const [currentUser, setCurrentUser] = useState<User>('Ambos');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [hidden, setHidden] = useState(false);
+  
+  // Alteração 1: Inicializar 'hidden' baseado no localStorage
+  const [hidden, setHidden] = useState(() => {
+     return localStorage.getItem('app_values_hidden') === 'true';
+  });
+
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1616,6 +1577,13 @@ const App = () => {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+
+  // Alteração 2: Ao montar o componente, se estiver 'hidden', abre o modal de senha automaticamente
+  useEffect(() => {
+     if (isAuthenticated && hidden) {
+        setIsUnlockModalOpen(true);
+     }
+  }, [isAuthenticated]);
 
   // Auth & Theme Effects
   useEffect(() => {
@@ -1783,6 +1751,7 @@ const App = () => {
      if(!confirm('Recriar categorias padrão?')) return;
   };
   
+  // Alteração 3: Salvar no localStorage ao ocultar
   const handleToggleHidden = () => {
     if (hidden) {
        setIsUnlockModalOpen(true);
@@ -1790,13 +1759,16 @@ const App = () => {
        setUnlockError('');
     } else {
        setHidden(true);
+       localStorage.setItem('app_values_hidden', 'true');
     }
   };
 
+  // Alteração 4: Salvar no localStorage ao revelar
   const handleUnlockSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (unlockPassword === APP_PASSWORD) {
          setHidden(false);
+         localStorage.setItem('app_values_hidden', 'false');
          setIsUnlockModalOpen(false);
          setUnlockError('');
       } else {
