@@ -7,7 +7,7 @@ import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from 
 import { MonthlyChart, CategoryChart, EvolutionChart, SemestralChart, LifestyleChart, UserDistChart, TopOffendersChart } from './components/Charts';
 import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category, PaymentMethod, SavingsGoal, AdviceHistoryItem, ShoppingItem } from './types';
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
-import { getFinancialAdvice, getProductInfoFromUrl } from './services/geminiService';
+import { getFinancialAdvice } from './services/geminiService';
 import { supabase } from './services/supabase';
 
 // --- Components Auxiliares de Modal ---
@@ -547,13 +547,16 @@ const ShoppingListPage = ({
 }) => {
    const [items, setItems] = useState<ShoppingItem[]>([]);
    const [loading, setLoading] = useState(false);
-   const [analyzingUrl, setAnalyzingUrl] = useState(false);
    const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
    const [form, setForm] = useState({
       description: '',
       amount: '',
       category: '',
       url: '',
+      type: 'despesa' as TransactionType,
+      payment_method: 'pix' as PaymentMethod,
+      is_recurring: false,
+      recurring_months: '',
       user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser
    });
 
@@ -568,8 +571,6 @@ const ShoppingListPage = ({
    const fetchItems = async () => {
       setLoading(true);
       const query = supabase.from('shopping_list').select('*').order('created_at', { ascending: false });
-      // Se for ambos, pega tudo. Se não, filtra.
-      // Ajuste: Se a tabela tiver user_name, use user_name.
       if (currentUser !== 'Ambos') {
          query.eq('user_name', currentUser);
       }
@@ -579,10 +580,12 @@ const ShoppingListPage = ({
       setLoading(false);
    };
 
-   const availableCategories = useMemo(() => {
-      return categories.filter(c => c.type === 'despesa').map(c => c.name).sort();
-   }, [categories]);
+   // Update form user if current user changes
+   useEffect(() => {
+     setForm(prev => ({ ...prev, user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser }));
+   }, [currentUser]);
 
+   // Helper for Nubank style input
    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawValue = e.target.value.replace(/\D/g, "");
       if (!rawValue) {
@@ -592,30 +595,16 @@ const ShoppingListPage = ({
       const floatValue = (parseInt(rawValue, 10) / 100).toFixed(2);
       setForm({ ...form, amount: floatValue });
    };
-   
-   // Handle amount change for editing
+
    const handleEditAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawValue = e.target.value.replace(/\D/g, "");
       const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
       setEditingItem(prev => prev ? {...prev, amount: floatValue} : null);
    };
 
-   // Lógica de Automação via URL
-   const handleUrlBlur = async () => {
-      if (!form.url || form.url.length < 5) return;
-      if (form.description && form.amount) return; // Se já preencheu, não sobrescreve
-
-      setAnalyzingUrl(true);
-      const info = await getProductInfoFromUrl(form.url, availableCategories);
-      
-      setForm(prev => ({
-         ...prev,
-         description: info.description || prev.description,
-         amount: info.amount ? info.amount.toFixed(2) : prev.amount,
-         category: info.category || prev.category
-      }));
-      setAnalyzingUrl(false);
-   };
+   const availableCategories = useMemo(() => {
+      return categories.filter(c => c.type === form.type).map(c => c.name).sort();
+   }, [categories, form.type]);
 
    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -627,13 +616,27 @@ const ShoppingListPage = ({
          category: form.category || availableCategories[0],
          user_name: form.user_name,
          url: form.url,
-         image_url: ''
+         type: form.type,
+         payment_method: form.payment_method,
+         is_recurring: form.is_recurring,
+         recurring_months: form.is_recurring ? Number(form.recurring_months) : 0
       };
 
+      // @ts-ignore - Ignore type error if column doesn't exist yet in Supabase
       const { data, error } = await supabase.from('shopping_list').insert([newItem]).select();
       if (data) {
          setItems(prev => [data[0], ...prev]);
-         setForm({ description: '', amount: '', category: '', url: '', user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser });
+         setForm({ 
+            description: '', 
+            amount: '', 
+            category: '', 
+            url: '', 
+            type: 'despesa', 
+            payment_method: 'pix', 
+            is_recurring: false, 
+            recurring_months: '',
+            user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser 
+         });
       }
    };
 
@@ -644,11 +647,14 @@ const ShoppingListPage = ({
    
    const handleUpdateItem = async () => {
       if (!editingItem) return;
+      // @ts-ignore
       const { error } = await supabase.from('shopping_list').update({
          description: editingItem.description,
          amount: editingItem.amount,
          category: editingItem.category,
-         url: editingItem.url
+         url: editingItem.url,
+         type: editingItem.type,
+         payment_method: editingItem.payment_method
       }).eq('id', editingItem.id);
 
       if (!error) {
@@ -658,7 +664,6 @@ const ShoppingListPage = ({
    };
 
    const handleBuyClick = (item: ShoppingItem) => {
-      // Regra: Só funciona se estiver em um perfil específico
       if (currentUser === 'Ambos') {
          setShowProfileAlert(true);
          return;
@@ -668,12 +673,15 @@ const ShoppingListPage = ({
 
    const confirmBuy = async () => {
       if (!itemToBuy) return;
-      // Regra: Enviar para as movimentações de QUEM ADICIONOU (item.user_name)
       const targetUser = itemToBuy.user_name || currentUser;
       await onBuy({ ...itemToBuy, user_name: targetUser });
       await handleDelete(itemToBuy.id);
       setItemToBuy(null);
    };
+
+   const displayAmount = form.amount 
+    ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(form.amount)) 
+    : "";
 
    return (
       <div className="space-y-6">
@@ -681,43 +689,55 @@ const ShoppingListPage = ({
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
                <IconShoppingCart className="w-5 h-5" /> Adicionar à Lista de Compras
             </h2>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
-               <div className="lg:col-span-4">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+               <div className="lg:col-span-2">
                   <Input 
-                     label="Link do Produto (URL)" 
-                     value={form.url} 
-                     onChange={e => setForm({...form, url: e.target.value})}
-                     placeholder="Cole o link aqui..."
-                  />
-                  {form.url && (
-                     <button 
-                        type="button" 
-                        onClick={handleUrlBlur} 
-                        disabled={analyzingUrl}
-                        className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"
-                     >
-                        {analyzingUrl ? <><IconRefresh className="w-3 h-3 animate-spin"/> Analisando link...</> : "Preencher com IA"}
-                     </button>
-                  )}
-               </div>
-               <div className="lg:col-span-3">
-                  <Input 
-                     label="Produto" 
+                     label="Descrição" 
                      value={form.description} 
                      onChange={e => setForm({...form, description: e.target.value})}
-                     placeholder={analyzingUrl ? "Carregando..." : "Nome do item"}
+                     placeholder="Nome do produto..."
                   />
                </div>
-               <div className="lg:col-span-2">
-                   <Input 
+               <div className="lg:col-span-1">
+                  <Input 
                      label="Valor Estimado (R$)" 
                      type="tel"
-                     value={form.amount ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(form.amount)) : ''} 
+                     value={displayAmount} 
                      onChange={handleAmountChange} 
                      placeholder="0,00"
-                   />
+                  />
                </div>
-               <div className="lg:col-span-2">
+               <div className="lg:col-span-1">
+                   <div className="flex flex-col gap-1 w-full">
+                     <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Tipo</label>
+                     <select 
+                       value={form.type} 
+                       onChange={e => setForm({...form, type: e.target.value as TransactionType})}
+                       className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
+                     >
+                       <option value="receita">Receita</option>
+                       <option value="despesa">Despesa</option>
+                     </select>
+                   </div>
+               </div>
+
+               <div className="lg:col-span-1">
+                   <div className="flex flex-col gap-1 w-full">
+                     <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Pagamento</label>
+                     <select 
+                       value={form.payment_method} 
+                       onChange={e => setForm({...form, payment_method: e.target.value as PaymentMethod})}
+                       className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
+                     >
+                       <option value="pix">Pix</option>
+                       <option value="dinheiro">Dinheiro</option>
+                       <option value="cartao">Cartão</option>
+                       <option value="boleto">Contas à Pagar</option>
+                     </select>
+                   </div>
+               </div>
+
+               <div className="lg:col-span-1">
                   <Select 
                      label="Categoria"
                      value={form.category}
@@ -725,9 +745,44 @@ const ShoppingListPage = ({
                      options={availableCategories}
                   />
                </div>
-               <div className="lg:col-span-1">
-                  <Button className="w-full h-10 flex items-center justify-center">
-                     <IconPlus className="w-5 h-5" />
+
+               <div className="lg:col-span-2">
+                  <Input 
+                     label="Link (Opcional)" 
+                     value={form.url} 
+                     onChange={e => setForm({...form, url: e.target.value})}
+                     placeholder="Cole o link aqui..."
+                  />
+               </div>
+               
+               <div className="lg:col-span-2 flex items-center gap-2 pt-1">
+                  <div className="flex items-center h-full">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input 
+                          type="checkbox" 
+                          checked={form.is_recurring} 
+                          onChange={e => setForm({...form, is_recurring: e.target.checked})}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">Recorrente?</span>
+                    </label>
+                  </div>
+                  {form.is_recurring && (
+                     <div className="w-24">
+                       <input
+                          type="number"
+                          placeholder="Meses"
+                          value={form.recurring_months} 
+                          onChange={e => setForm({...form, recurring_months: e.target.value})}
+                          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm w-full outline-none focus:ring-2 focus:ring-blue-500"
+                       />
+                     </div>
+                  )}
+              </div>
+
+               <div className="lg:col-span-2">
+                  <Button className="w-full flex items-center justify-center gap-2">
+                     <IconPlus className="w-5 h-5" /> Adicionar à Lista
                   </Button>
                </div>
             </form>
@@ -742,8 +797,9 @@ const ShoppingListPage = ({
                      </div>
                      <div className="overflow-hidden">
                         <h4 className="font-bold text-slate-800 dark:text-white text-lg truncate max-w-[200px] md:max-w-md" title={item.description}>{item.description}</h4>
-                        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                            <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-xs uppercase font-bold">{item.category}</span>
+                           <span className="text-xs uppercase">{item.payment_method || 'pix'}</span>
                            {item.url && (
                               <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">
                                  <IconLink className="w-3 h-3" /> Link
@@ -803,14 +859,27 @@ const ShoppingListPage = ({
                      onChange={e => setEditingItem({...editingItem, description: e.target.value})} 
                   />
                    <Input 
-                     label="Valor Estimado (R$)" 
+                     label="Valor (R$)" 
                      type="tel"
                      value={editingItem.amount ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(editingItem.amount) : ''} 
                      onChange={handleEditAmountChange} 
                      placeholder="0,00"
                    />
+                  <div className="flex flex-col gap-1 w-full">
+                     <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Pagamento</label>
+                     <select 
+                       value={editingItem.payment_method || 'pix'} 
+                       onChange={e => setEditingItem({...editingItem, payment_method: e.target.value as PaymentMethod})}
+                       className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full"
+                     >
+                       <option value="pix">Pix</option>
+                       <option value="dinheiro">Dinheiro</option>
+                       <option value="cartao">Cartão</option>
+                       <option value="boleto">Contas à Pagar</option>
+                     </select>
+                   </div>
                   <Input 
-                     label="Link do Produto (URL)" 
+                     label="Link (URL)" 
                      value={editingItem.url || ''} 
                      onChange={e => setEditingItem({...editingItem, url: e.target.value})} 
                   />
@@ -837,7 +906,7 @@ const ShoppingListPage = ({
              onClose={() => setItemToBuy(null)}
              onConfirm={confirmBuy}
              title="Confirmar Compra"
-             message={itemToBuy ? `Confirmar compra de "${itemToBuy.description}"? Isso irá lançar uma despesa para ${itemToBuy.user_name || currentUser}.` : ''}
+             message={itemToBuy ? `Confirmar compra de "${itemToBuy.description}"? Isso irá lançar uma despesa para ${itemToBuy.user_name || currentUser} hoje.` : ''}
          />
       </div>
    );
@@ -2177,12 +2246,12 @@ const App = () => {
          amount: item.amount,
          category: item.category,
          user: item.user_name || 'Ambos',
-         type: 'despesa' as TransactionType,
+         type: item.type || 'despesa',
          date: new Date().toISOString().split('T')[0], // Data de hoje
-         payment_method: 'pix' as PaymentMethod, // Padrão
+         payment_method: item.payment_method || 'pix', 
          is_paid: true, // Já comprou, então está pago
-         is_recurring: false,
-         recurring_months: 0
+         is_recurring: item.is_recurring,
+         recurring_months: item.recurring_months
       };
 
       await handleAddTransaction(newTransaction);
