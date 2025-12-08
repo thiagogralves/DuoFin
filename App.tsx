@@ -92,30 +92,54 @@ const AddTransactionForm = ({
   setForm,
   onSubmit,
   isLoading,
-  availableCategories
+  availableCategories,
+  history = [] // Recebe o histórico para sugestão inteligente
 }: {
   form: any;
   setForm: (f: any) => void;
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
   availableCategories: string[];
+  history?: Transaction[];
 }) => {
   // Função para lidar com a entrada de valor estilo Nubank (centavos automáticos)
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Remove tudo que não for número
     const rawValue = e.target.value.replace(/\D/g, "");
-    
     if (!rawValue) {
        setForm({ ...form, amount: "" });
        return;
     }
-
-    // Converte para float dividindo por 100
     const floatValue = (parseInt(rawValue, 10) / 100).toFixed(2);
     setForm({ ...form, amount: floatValue });
   };
 
-  // Formata o valor para exibição no input (Ex: 1234 -> 12,34)
+  // Função para lidar com a descrição e sugerir categoria automaticamente
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     const desc = e.target.value;
+     let updatedForm = { ...form, description: desc };
+
+     // Lógica de Inteligência de Categoria
+     // Se digitou mais de 2 letras, procura no histórico
+     if (desc.length > 2 && history.length > 0) {
+        // Encontra a transação mais recente que contenha o texto digitado (case insensitive)
+        // E que seja do mesmo tipo (receita/despesa)
+        const match = history.find(t => 
+           t.description.toLowerCase().includes(desc.toLowerCase()) && 
+           t.type === form.type
+        );
+
+        if (match) {
+           // Verifica se a categoria do match ainda existe na lista de categorias disponíveis
+           const categoryExists = availableCategories.includes(match.category);
+           if (categoryExists) {
+              updatedForm.category = match.category;
+           }
+        }
+     }
+     
+     setForm(updatedForm);
+  };
+
   const displayAmount = form.amount 
     ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(form.amount)) 
     : "";
@@ -126,13 +150,13 @@ const AddTransactionForm = ({
         <Input 
           label="Descrição" 
           value={form.description} 
-          onChange={e => setForm({...form, description: e.target.value})} 
-          placeholder="Ex: Compra Mercado"
+          onChange={handleDescriptionChange} 
+          placeholder="Ex: Burguer King, Uber..."
         />
       </div>
       <Input 
         label="Valor (R$)" 
-        type="tel" // Teclado numérico no mobile
+        type="tel" 
         value={displayAmount} 
         onChange={handleAmountChange} 
         placeholder="0,00"
@@ -215,10 +239,6 @@ const AddTransactionForm = ({
     </form>
   );
 };
-
-// ... [Outros componentes mantidos iguais até o App] ...
-// Por brevidade, mantendo os componentes ReportCalendar, AdvisorPage, TransactionsPage, DashboardPage, InvestmentsPage, SettingsPage, LoginPage inalterados.
-// O XML requer o conteúdo completo, então estou replicando os componentes essenciais e focando nas mudanças no App component.
 
 const ReportCalendar = ({ 
   datesWithReports, 
@@ -674,6 +694,7 @@ const TransactionsPage = ({
              onSubmit={handleSubmit} 
              isLoading={isLoading} 
              availableCategories={availableCategories} 
+             history={transactions} // Passando histórico para inteligência
            />
          </Card>
        )}
@@ -694,6 +715,7 @@ const TransactionsPage = ({
              onSubmit={handleSubmit} 
              isLoading={isLoading} 
              availableCategories={availableCategories} 
+             history={transactions} // Passando histórico para inteligência
            />
        </Modal>
  
