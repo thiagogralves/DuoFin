@@ -46,7 +46,7 @@ export const MonthlyChart = ({ transactions = [], hidden = false }: ChartsProps)
 
   return (
     <div className="h-60 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart
           data={data}
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
@@ -93,7 +93,7 @@ export const CategoryChart = ({ transactions = [], hidden = false }: ChartsProps
 
   return (
     <div className="h-60 w-full flex justify-center">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <PieChart>
           <Pie
             data={data}
@@ -126,7 +126,7 @@ export const EvolutionChart = ({ data, hidden = false }: ChartsProps) => {
  
    return (
      <div className="h-60 w-full">
-       <ResponsiveContainer width="100%" height="100%">
+       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
          <AreaChart
            data={data}
            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
@@ -189,7 +189,7 @@ export const SemestralChart = ({ transactions = [], hidden = false, currentDate 
  
    return (
      <div className="h-60 w-full">
-       <ResponsiveContainer width="100%" height="100%">
+       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
          <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.5} />
            <XAxis dataKey="label" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
@@ -229,7 +229,7 @@ export const SemestralChart = ({ transactions = [], hidden = false, currentDate 
  
    return (
      <div className="h-60 w-full">
-       <ResponsiveContainer width="100%" height="100%">
+       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
          <PieChart>
            <Pie
              data={data}
@@ -270,7 +270,7 @@ export const SemestralChart = ({ transactions = [], hidden = false, currentDate 
     
     return (
       <div className="h-60 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
              <XAxis type="number" hide />
@@ -303,7 +303,7 @@ export const SemestralChart = ({ transactions = [], hidden = false, currentDate 
  
     return (
        <div className="h-60 w-full">
-         <ResponsiveContainer width="100%" height="100%">
+         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
            <BarChart data={data} layout="vertical" margin={{ left: 40 }}>
               <XAxis type="number" hide />
               <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11}} />
