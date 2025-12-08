@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Investment } from '../types';
 
@@ -19,6 +18,49 @@ const calculateTotals = (transactions: Transaction[]) => {
   return { income, expenses, balance: income - expenses };
 };
 
+export const getProductInfoFromUrl = async (url: string, availableCategories: string[]): Promise<{ description?: string, amount?: number, category?: string }> => {
+  try {
+    if (!API_KEY) return {};
+
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+    const prompt = `
+      Você é um assistente de extração de dados.
+      Analise a seguinte URL de produto e extraia as informações mais prováveis: ${url}
+      
+      Tarefas:
+      1. Extraia o NOME DO PRODUTO (descrição) baseado no slug ou texto da URL.
+      2. Estime um PREÇO (amount) em BRL (Reais) que seja comum para este produto no mercado atual. Se não conseguir estimar, retorne 0.
+      3. Escolha a CATEGORIA mais adequada da lista abaixo:
+      ${availableCategories.join(', ')}
+
+      Retorne APENAS um JSON neste formato:
+      {
+        "description": "Nome do Produto",
+        "amount": 100.00,
+        "category": "Categoria Escolhida"
+      }
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const text = response.text;
+    if (text) {
+       return JSON.parse(text);
+    }
+    return {};
+  } catch (error) {
+    console.error("Erro ao analisar URL do produto:", error);
+    return {};
+  }
+};
+
 export const getFinancialAdvice = async (
   transactions: Transaction[],
   investments: Investment[]
@@ -33,7 +75,6 @@ export const getFinancialAdvice = async (
     // 1. Pré-processamento de Dados (Aggregation)
     
     // Separação de Recorrentes vs Variáveis (Para análise de curto prazo)
-    // Assumimos que is_recurring são parcelas ou fixos que "já foram comprometidos"
     const isFixedOrInstallment = (t: Transaction) => t.is_recurring;
 
     // Curto Prazo (Últimos 30 dias)
@@ -54,7 +95,6 @@ export const getFinancialAdvice = async (
     // Longo Prazo (1 ano e 3 anos - simulação baseada no histórico total se for menor)
     const lastYear = filterByDateRange(transactions, 365);
     const stats1y = calculateTotals(lastYear);
-    const statsTotal = calculateTotals(transactions); // Histórico total disponível
 
     // Análise por Usuário (Thiago vs Marcela - Mês Atual)
     const thiagoTrans = last30Days.filter(t => t.user === 'Thiago');
