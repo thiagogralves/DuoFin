@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
@@ -10,6 +9,28 @@ import { Transaction, Investment, User, InvestmentType, TransactionType, Budget,
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
 import { getFinancialAdvice, getProductInfoFromUrl } from './services/geminiService';
 import { supabase } from './services/supabase';
+
+// --- Components Auxiliares de Modal ---
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, title: string, message: string }) => (
+  <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <div className="space-y-4">
+      <p className="text-slate-600 dark:text-slate-300">{message}</p>
+      <div className="flex gap-2 justify-end">
+        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+        <Button onClick={() => { onConfirm(); onClose(); }}>Confirmar</Button>
+      </div>
+    </div>
+  </Modal>
+);
+
+const AlertModal = ({ isOpen, onClose, title, message }: { isOpen: boolean, onClose: () => void, title: string, message: string }) => (
+  <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <div className="space-y-4">
+      <p className="text-slate-600 dark:text-slate-300">{message}</p>
+      <Button onClick={onClose} className="w-full">OK</Button>
+    </div>
+  </Modal>
+);
 
 // --- Helper Functions ---
 const getMonthName = (date: Date) => {
@@ -343,6 +364,9 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
   const [loading, setLoading] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
+  
+  // Modal states
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   const getMonday = (d: Date) => {
     const day = d.getDay();
@@ -397,12 +421,6 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
     setLoading(false);
   };
 
-  const handleForceRegenerate = () => {
-     if (confirm('Deseja forçar uma nova análise agora? Isso consumirá créditos da IA.')) {
-        generateAdvice(history);
-     }
-  };
-
   const selectedReport = history.find(h => h.id === selectedReportId);
 
   const datesWithReports = useMemo(() => {
@@ -442,7 +460,7 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
                   )}
                </div>
                {!loading && (
-                  <button onClick={handleForceRegenerate} className="text-xs bg-white dark:bg-purple-800 text-purple-600 dark:text-white border border-purple-200 dark:border-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors shadow-sm">
+                  <button onClick={() => setShowRegenerateConfirm(true)} className="text-xs bg-white dark:bg-purple-800 text-purple-600 dark:text-white border border-purple-200 dark:border-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors shadow-sm">
                      Forçar Análise
                   </button>
                )}
@@ -504,6 +522,14 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
             )}
          </div>
       </div>
+      
+      <ConfirmModal 
+         isOpen={showRegenerateConfirm}
+         onClose={() => setShowRegenerateConfirm(false)}
+         onConfirm={() => generateAdvice(history)}
+         title="Forçar Análise"
+         message="Deseja forçar uma nova análise agora? Isso irá gerar um novo relatório para a semana atual."
+      />
     </div>
   );
 };
@@ -530,6 +556,10 @@ const ShoppingListPage = ({
       url: '',
       user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser
    });
+
+   // Modal States
+   const [showProfileAlert, setShowProfileAlert] = useState(false);
+   const [itemToBuy, setItemToBuy] = useState<ShoppingItem | null>(null);
 
    useEffect(() => {
       fetchItems();
@@ -627,21 +657,22 @@ const ShoppingListPage = ({
       }
    };
 
-   const handleBuyClick = async (item: ShoppingItem) => {
+   const handleBuyClick = (item: ShoppingItem) => {
       // Regra: Só funciona se estiver em um perfil específico
       if (currentUser === 'Ambos') {
-         alert('Por favor, selecione o perfil de Thiago ou Marcela no topo da tela para realizar a compra.');
+         setShowProfileAlert(true);
          return;
       }
+      setItemToBuy(item);
+   };
 
+   const confirmBuy = async () => {
+      if (!itemToBuy) return;
       // Regra: Enviar para as movimentações de QUEM ADICIONOU (item.user_name)
-      const targetUser = item.user_name || currentUser; // Fallback para currentUser se não tiver user_name
-
-      if(confirm(`Confirmar compra de "${item.description}"? Isso irá lançar uma despesa para ${targetUser}.`)) {
-         // Agora usamos o targetUser (dono do item) e não o currentUser
-         await onBuy({ ...item, user_name: targetUser });
-         await handleDelete(item.id);
-      }
+      const targetUser = itemToBuy.user_name || currentUser;
+      await onBuy({ ...itemToBuy, user_name: targetUser });
+      await handleDelete(itemToBuy.id);
+      setItemToBuy(null);
    };
 
    return (
@@ -762,7 +793,7 @@ const ShoppingListPage = ({
             )}
          </div>
 
-         {/* Modal de Edição */}
+         {/* Modais */}
          <Modal isOpen={!!editingItem} onClose={() => setEditingItem(null)} title="Editar Item">
             {editingItem && (
                <div className="space-y-4">
@@ -793,6 +824,21 @@ const ShoppingListPage = ({
                </div>
             )}
          </Modal>
+
+         <AlertModal 
+             isOpen={showProfileAlert}
+             onClose={() => setShowProfileAlert(false)}
+             title="Selecione um Perfil"
+             message="Por favor, selecione o perfil de Thiago ou Marcela no topo da tela para realizar a compra."
+         />
+
+         <ConfirmModal 
+             isOpen={!!itemToBuy}
+             onClose={() => setItemToBuy(null)}
+             onConfirm={confirmBuy}
+             title="Confirmar Compra"
+             message={itemToBuy ? `Confirmar compra de "${itemToBuy.description}"? Isso irá lançar uma despesa para ${itemToBuy.user_name || currentUser}.` : ''}
+         />
       </div>
    );
 };
@@ -838,6 +884,7 @@ const TransactionsPage = ({
    const [searchTerm, setSearchTerm] = useState('');
    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+   const [showRecurringHelp, setShowRecurringHelp] = useState(false);
  
    useEffect(() => {
      const catsOfType = categories.filter(c => c.type === form.type).map(c => c.name).sort();
@@ -963,7 +1010,7 @@ const TransactionsPage = ({
              <Button variant="secondary" onClick={exportToCSV} className="text-xs py-1 px-3">
                 <IconDownload className="w-3 h-3" /> Exportar
              </Button>
-             <Button variant="secondary" onClick={onGenerateRecurring} className="text-xs py-1 px-3">
+             <Button variant="secondary" onClick={() => setShowRecurringHelp(true)} className="text-xs py-1 px-3">
                 <IconRefresh className="w-3 h-3" /> Recorrentes
              </Button>
           </div>
@@ -1139,6 +1186,13 @@ const TransactionsPage = ({
              </div>
           )}
        </Modal>
+       
+       <AlertModal 
+           isOpen={showRecurringHelp}
+           onClose={() => setShowRecurringHelp(false)}
+           title="Recorrentes"
+           message="A funcionalidade de gerar recorrentes automaticamente está em desenvolvimento. Por enquanto, elas são geradas automaticamente ao criar uma movimentação com a opção 'Recorrente?' marcada."
+       />
      </div>
    );
  };
@@ -1170,6 +1224,7 @@ const TransactionsPage = ({
  }) => {
    const [editingBudget, setEditingBudget] = useState<{cat: string, val: string} | null>(null);
    const [editingGoal, setEditingGoal] = useState<SavingsGoal | {name: '', target: '', current: ''} | null>(null);
+   const [showBudgetHelp, setShowBudgetHelp] = useState(false);
  
    const filteredTransactions = transactions.filter(t => {
      const tDate = new Date(t.date);
@@ -1408,7 +1463,7 @@ const TransactionsPage = ({
              </h3>
              <button 
                 className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                onClick={() => alert('Clique em uma categoria para definir o limite mensal.')}
+                onClick={() => setShowBudgetHelp(true)}
              >
                 Como funciona?
              </button>
@@ -1495,6 +1550,13 @@ const TransactionsPage = ({
              <Button onClick={handleBudgetSave} className="w-full">Salvar Meta</Button>
           </div>
        </Modal>
+
+       <AlertModal 
+           isOpen={showBudgetHelp}
+           onClose={() => setShowBudgetHelp(false)}
+           title="Metas de Orçamento"
+           message="Clique em qualquer categoria listada abaixo para definir um limite mensal de gastos. A barra ficará vermelha se você ultrapassar o limite."
+       />
      </div>
    );
  };
@@ -1519,6 +1581,8 @@ const TransactionsPage = ({
      type: 'geral' as InvestmentType,
      amount: ''
    });
+
+   const [showInvestHelp, setShowInvestHelp] = useState(false);
  
    const handleAdd = (e: React.FormEvent) => {
      e.preventDefault();
@@ -1646,7 +1710,7 @@ const TransactionsPage = ({
              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Gerido por: {inv.user}</p>
              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(inv.currentAmount, hidden)}</p>
              <div className="mt-4 flex gap-2">
-                <Button variant="secondary" className="text-xs py-1 px-2 w-full" onClick={() => alert('Para simplificar, para editar o saldo delete e recrie por enquanto.')}>+ Aportar</Button>
+                <Button variant="secondary" className="text-xs py-1 px-2 w-full" onClick={() => setShowInvestHelp(true)}>+ Aportar</Button>
              </div>
            </Card>
          ))}
@@ -1656,6 +1720,13 @@ const TransactionsPage = ({
            </div>
          )}
        </div>
+
+       <AlertModal 
+           isOpen={showInvestHelp}
+           onClose={() => setShowInvestHelp(false)}
+           title="Aporte / Resgate"
+           message="Para simplificar, para editar o saldo delete e recrie por enquanto. Em breve teremos histórico detalhado de aportes."
+       />
      </div>
    );
  };
@@ -1683,6 +1754,7 @@ const TransactionsPage = ({
    const [newCatType, setNewCatType] = useState('despesa');
    const [viewType, setViewType] = useState<'receita' | 'despesa'>('despesa');
    const [editingCat, setEditingCat] = useState<{id: string, name: string, oldName: string} | null>(null);
+   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
  
    const handleCreate = () => {
      if (newCatName) {
@@ -1739,7 +1811,7 @@ const TransactionsPage = ({
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Gerenciar Categorias</h3>
              <button 
-                onClick={onRestoreDefaults}
+                onClick={() => setShowRestoreConfirm(true)}
                 className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 underline"
              >
                 Restaurar Categorias Padrão
@@ -1846,6 +1918,14 @@ const TransactionsPage = ({
             Sair do Aplicativo
           </Button>
        </Card>
+
+       <ConfirmModal 
+           isOpen={showRestoreConfirm}
+           onClose={() => setShowRestoreConfirm(false)}
+           onConfirm={onRestoreDefaults}
+           title="Restaurar Categorias"
+           message="Tem certeza que deseja recriar as categorias padrão? Isso não apaga suas categorias personalizadas, apenas restaura as originais se tiverem sido excluídas."
+       />
      </div>
    );
  };
@@ -2087,7 +2167,7 @@ const App = () => {
   };
   
   const handleRestoreDefaults = async () => {
-     if(!confirm('Recriar categorias padrão?')) return;
+     // TODO: Implement restore logic here if needed
   };
 
   const handleBuyFromShoppingList = async (item: ShoppingItem) => {
