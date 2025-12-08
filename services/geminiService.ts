@@ -181,3 +181,4 @@ export const getFinancialAdvice = async (
     return "Desculpe, ocorreu um erro técnico ao gerar sua consultoria. Tente novamente mais tarde.";
   }
 };
+ 
