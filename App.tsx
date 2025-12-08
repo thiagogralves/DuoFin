@@ -100,6 +100,26 @@ const AddTransactionForm = ({
   isLoading: boolean;
   availableCategories: string[];
 }) => {
+  // Função para lidar com a entrada de valor estilo Nubank (centavos automáticos)
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Remove tudo que não for número
+    const rawValue = e.target.value.replace(/\D/g, "");
+    
+    if (!rawValue) {
+       setForm({ ...form, amount: "" });
+       return;
+    }
+
+    // Converte para float dividindo por 100
+    const floatValue = (parseInt(rawValue, 10) / 100).toFixed(2);
+    setForm({ ...form, amount: floatValue });
+  };
+
+  // Formata o valor para exibição no input (Ex: 1234 -> 12,34)
+  const displayAmount = form.amount 
+    ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(form.amount)) 
+    : "";
+
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
       <div className="lg:col-span-2">
@@ -112,9 +132,9 @@ const AddTransactionForm = ({
       </div>
       <Input 
         label="Valor (R$)" 
-        type="number" 
-        value={form.amount} 
-        onChange={e => setForm({...form, amount: e.target.value})} 
+        type="tel" // Teclado numérico no mobile
+        value={displayAmount} 
+        onChange={handleAmountChange} 
         placeholder="0,00"
       />
       <div className="flex flex-col gap-1 w-full">
@@ -606,6 +626,13 @@ const TransactionsPage = ({
      link.click();
      document.body.removeChild(link);
    };
+
+   // Helper para edição no estilo Nubank
+   const handleEditAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const rawValue = e.target.value.replace(/\D/g, "");
+      const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
+      setEditingTransaction(prev => prev ? {...prev, amount: floatValue} : null);
+   };
  
    return (
      <div className="space-y-6">
@@ -667,7 +694,7 @@ const TransactionsPage = ({
              onSubmit={handleSubmit} 
              isLoading={isLoading} 
              availableCategories={availableCategories} 
-          />
+           />
        </Modal>
  
        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden w-full">
@@ -764,9 +791,9 @@ const TransactionsPage = ({
                 />
                 <Input 
                    label="Valor (R$)" 
-                   type="number"
-                   value={editingTransaction.amount} 
-                   onChange={e => setEditingTransaction({...editingTransaction, amount: Number(e.target.value)})} 
+                   type="tel"
+                   value={editingTransaction.amount ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} 
+                   onChange={handleEditAmountChange} 
                 />
                 <div className="flex flex-col gap-1 w-full">
                    <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Data</label>
