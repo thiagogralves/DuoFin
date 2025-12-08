@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
-  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff, IconCheck, IconClock, IconSearch, IconDownload, IconFileText, IconSun, IconMoon, IconActivity, IconTrophy, IconStar, IconBarChartHorizontal
+  IconPieChart, IconList, IconPlus, IconTrash, IconBrain, IconShield, IconSettings, IconCalendar, IconRefresh, IconTarget, IconClose, IconMenu, IconEdit, IconEye, IconEyeOff, IconCheck, IconClock, IconSearch, IconDownload, IconFileText, IconSun, IconMoon, IconActivity, IconTrophy, IconStar, IconBarChartHorizontal, IconShoppingCart, IconLink, IconExternalLink
 } from './components/Icons';
 import { Card, Button, Input, Select, formatCurrency, Modal, ProgressBar } from './components/UI';
 import { MonthlyChart, CategoryChart, EvolutionChart, SemestralChart, LifestyleChart, UserDistChart, TopOffendersChart } from './components/Charts';
-import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category, PaymentMethod, SavingsGoal, AdviceHistoryItem } from './types';
+import { Transaction, Investment, User, InvestmentType, TransactionType, Budget, Category, PaymentMethod, SavingsGoal, AdviceHistoryItem, ShoppingItem } from './types';
 import { USERS, CATEGORIES, APP_PASSWORD } from './constants';
-import { getFinancialAdvice } from './services/geminiService';
+import { getFinancialAdvice, getProductInfoFromUrl } from './services/geminiService';
 import { supabase } from './services/supabase';
 
 // --- Helper Functions ---
@@ -507,6 +508,295 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
   );
 };
 
+const ShoppingListPage = ({
+   currentUser,
+   categories,
+   hidden,
+   onBuy
+}: {
+   currentUser: User,
+   categories: Category[],
+   hidden: boolean,
+   onBuy: (item: ShoppingItem) => void
+}) => {
+   const [items, setItems] = useState<ShoppingItem[]>([]);
+   const [loading, setLoading] = useState(false);
+   const [analyzingUrl, setAnalyzingUrl] = useState(false);
+   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
+   const [form, setForm] = useState({
+      description: '',
+      amount: '',
+      category: '',
+      url: '',
+      user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser
+   });
+
+   useEffect(() => {
+      fetchItems();
+   }, [currentUser]);
+
+   const fetchItems = async () => {
+      setLoading(true);
+      const query = supabase.from('shopping_list').select('*').order('created_at', { ascending: false });
+      // Se for ambos, pega tudo. Se não, filtra.
+      // Ajuste: Se a tabela tiver user_name, use user_name.
+      if (currentUser !== 'Ambos') {
+         query.eq('user_name', currentUser);
+      }
+      
+      const { data } = await query;
+      if (data) setItems(data);
+      setLoading(false);
+   };
+
+   const availableCategories = useMemo(() => {
+      return categories.filter(c => c.type === 'despesa').map(c => c.name).sort();
+   }, [categories]);
+
+   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const rawValue = e.target.value.replace(/\D/g, "");
+      if (!rawValue) {
+         setForm({ ...form, amount: "" });
+         return;
+      }
+      const floatValue = (parseInt(rawValue, 10) / 100).toFixed(2);
+      setForm({ ...form, amount: floatValue });
+   };
+   
+   // Handle amount change for editing
+   const handleEditAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const rawValue = e.target.value.replace(/\D/g, "");
+      const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
+      setEditingItem(prev => prev ? {...prev, amount: floatValue} : null);
+   };
+
+   // Lógica de Automação via URL
+   const handleUrlBlur = async () => {
+      if (!form.url || form.url.length < 5) return;
+      if (form.description && form.amount) return; // Se já preencheu, não sobrescreve
+
+      setAnalyzingUrl(true);
+      const info = await getProductInfoFromUrl(form.url, availableCategories);
+      
+      setForm(prev => ({
+         ...prev,
+         description: info.description || prev.description,
+         amount: info.amount ? info.amount.toFixed(2) : prev.amount,
+         category: info.category || prev.category
+      }));
+      setAnalyzingUrl(false);
+   };
+
+   const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!form.description) return;
+
+      const newItem = {
+         description: form.description,
+         amount: Number(form.amount || 0),
+         category: form.category || availableCategories[0],
+         user_name: form.user_name,
+         url: form.url,
+         image_url: ''
+      };
+
+      const { data, error } = await supabase.from('shopping_list').insert([newItem]).select();
+      if (data) {
+         setItems(prev => [data[0], ...prev]);
+         setForm({ description: '', amount: '', category: '', url: '', user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser });
+      }
+   };
+
+   const handleDelete = async (id: string) => {
+      const { error } = await supabase.from('shopping_list').delete().eq('id', id);
+      if (!error) setItems(prev => prev.filter(i => i.id !== id));
+   };
+   
+   const handleUpdateItem = async () => {
+      if (!editingItem) return;
+      const { error } = await supabase.from('shopping_list').update({
+         description: editingItem.description,
+         amount: editingItem.amount,
+         category: editingItem.category,
+         url: editingItem.url
+      }).eq('id', editingItem.id);
+
+      if (!error) {
+         setItems(prev => prev.map(i => i.id === editingItem.id ? editingItem : i));
+         setEditingItem(null);
+      }
+   };
+
+   const handleBuyClick = async (item: ShoppingItem) => {
+      // Regra: Só funciona se estiver em um perfil específico
+      if (currentUser === 'Ambos') {
+         alert('Por favor, selecione o perfil de Thiago ou Marcela no topo da tela para realizar a compra.');
+         return;
+      }
+
+      // Regra: Enviar para as movimentações de QUEM ADICIONOU (item.user_name)
+      const targetUser = item.user_name || currentUser; // Fallback para currentUser se não tiver user_name
+
+      if(confirm(`Confirmar compra de "${item.description}"? Isso irá lançar uma despesa para ${targetUser}.`)) {
+         // Agora usamos o targetUser (dono do item) e não o currentUser
+         await onBuy({ ...item, user_name: targetUser });
+         await handleDelete(item.id);
+      }
+   };
+
+   return (
+      <div className="space-y-6">
+         <Card className="border-l-4 border-l-amber-500">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+               <IconShoppingCart className="w-5 h-5" /> Adicionar à Lista de Compras
+            </h2>
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+               <div className="lg:col-span-4">
+                  <Input 
+                     label="Link do Produto (URL)" 
+                     value={form.url} 
+                     onChange={e => setForm({...form, url: e.target.value})}
+                     placeholder="Cole o link aqui..."
+                  />
+                  {form.url && (
+                     <button 
+                        type="button" 
+                        onClick={handleUrlBlur} 
+                        disabled={analyzingUrl}
+                        className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"
+                     >
+                        {analyzingUrl ? <><IconRefresh className="w-3 h-3 animate-spin"/> Analisando link...</> : "Preencher com IA"}
+                     </button>
+                  )}
+               </div>
+               <div className="lg:col-span-3">
+                  <Input 
+                     label="Produto" 
+                     value={form.description} 
+                     onChange={e => setForm({...form, description: e.target.value})}
+                     placeholder={analyzingUrl ? "Carregando..." : "Nome do item"}
+                  />
+               </div>
+               <div className="lg:col-span-2">
+                   <Input 
+                     label="Valor Estimado (R$)" 
+                     type="tel"
+                     value={form.amount ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(form.amount)) : ''} 
+                     onChange={handleAmountChange} 
+                     placeholder="0,00"
+                   />
+               </div>
+               <div className="lg:col-span-2">
+                  <Select 
+                     label="Categoria"
+                     value={form.category}
+                     onChange={e => setForm({...form, category: e.target.value})}
+                     options={availableCategories}
+                  />
+               </div>
+               <div className="lg:col-span-1">
+                  <Button className="w-full h-10 flex items-center justify-center">
+                     <IconPlus className="w-5 h-5" />
+                  </Button>
+               </div>
+            </form>
+         </Card>
+
+         <div className="grid grid-cols-1 gap-4">
+            {items.map(item => (
+               <Card key={item.id} className="flex flex-col md:flex-row items-center justify-between p-4 gap-4">
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                     <div className="bg-amber-100 text-amber-600 p-3 rounded-full hidden md:flex">
+                        <IconShoppingCart className="w-6 h-6" />
+                     </div>
+                     <div className="overflow-hidden">
+                        <h4 className="font-bold text-slate-800 dark:text-white text-lg truncate max-w-[200px] md:max-w-md" title={item.description}>{item.description}</h4>
+                        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                           <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-xs uppercase font-bold">{item.category}</span>
+                           {item.url && (
+                              <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">
+                                 <IconLink className="w-3 h-3" /> Link
+                              </a>
+                           )}
+                           <span>• {item.user_name}</span>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                     <span className="text-xl font-bold text-slate-700 dark:text-slate-300">
+                        {item.amount > 0 ? formatCurrency(item.amount, hidden) : 'Preço n/d'}
+                     </span>
+                     <div className="flex items-center gap-2">
+                        <button 
+                           onClick={() => handleBuyClick(item)}
+                           className="bg-emerald-500 text-white p-2 rounded-lg hover:bg-emerald-600 transition-colors shadow-sm flex items-center gap-2"
+                           title="Comprar (Mover para Despesas)"
+                        >
+                           <IconShoppingCart className="w-5 h-5" />
+                           <span className="md:hidden font-bold">Comprar</span>
+                        </button>
+                        <button 
+                           onClick={() => setEditingItem(item)}
+                           className="text-slate-400 hover:text-blue-500 p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                           title="Editar"
+                        >
+                           <IconEdit className="w-5 h-5" />
+                        </button>
+                        <button 
+                           onClick={() => handleDelete(item.id)}
+                           className="text-slate-400 hover:text-red-500 p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                           title="Excluir"
+                        >
+                           <IconTrash className="w-5 h-5" />
+                        </button>
+                     </div>
+                  </div>
+               </Card>
+            ))}
+            {items.length === 0 && (
+               <div className="text-center py-12 text-slate-400">
+                  <IconShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p>Sua lista de compras está vazia.</p>
+               </div>
+            )}
+         </div>
+
+         {/* Modal de Edição */}
+         <Modal isOpen={!!editingItem} onClose={() => setEditingItem(null)} title="Editar Item">
+            {editingItem && (
+               <div className="space-y-4">
+                  <Input 
+                     label="Descrição" 
+                     value={editingItem.description} 
+                     onChange={e => setEditingItem({...editingItem, description: e.target.value})} 
+                  />
+                   <Input 
+                     label="Valor Estimado (R$)" 
+                     type="tel"
+                     value={editingItem.amount ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(editingItem.amount) : ''} 
+                     onChange={handleEditAmountChange} 
+                     placeholder="0,00"
+                   />
+                  <Input 
+                     label="Link do Produto (URL)" 
+                     value={editingItem.url || ''} 
+                     onChange={e => setEditingItem({...editingItem, url: e.target.value})} 
+                  />
+                  <Select 
+                     label="Categoria"
+                     value={editingItem.category}
+                     onChange={e => setEditingItem({...editingItem, category: e.target.value})}
+                     options={availableCategories}
+                  />
+                  <Button onClick={handleUpdateItem} className="w-full">Salvar Alterações</Button>
+               </div>
+            )}
+         </Modal>
+      </div>
+   );
+};
+
 const TransactionsPage = ({ 
    transactions, 
    onAdd, 
@@ -725,7 +1015,7 @@ const TransactionsPage = ({
              <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-xs">
                <tr>
                  <th className="p-4">Data</th>
-                 <th className="p-4">Descrição</th>
+                 <th className="p-4 font-w-32 md:w-auto truncate">Descrição</th>
                  <th className="p-4">Quem</th>
                  <th className="p-4">Categoria</th>
                  <th className="p-4">Forma</th>
@@ -747,7 +1037,7 @@ const TransactionsPage = ({
                          </div>
                      )}
                    </td>
-                   <td className="p-4 font-medium text-slate-800 dark:text-white whitespace-nowrap">{t.description}</td>
+                   <td className="p-4 font-medium text-slate-800 dark:text-white whitespace-nowrap max-w-[150px] md:max-w-xs truncate" title={t.description}>{t.description}</td>
                    <td className="p-4">
                      <span className={`px-2 py-1 rounded-full text-xs ${t.user === 'Thiago' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300'}`}>
                        {t.user}
@@ -1602,7 +1892,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
 // Main App Component
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'investments' | 'advisor' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'investments' | 'shopping' | 'advisor' | 'settings'>('dashboard');
   const [currentUser, setCurrentUser] = useState<User>('Ambos');
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -1799,6 +2089,26 @@ const App = () => {
   const handleRestoreDefaults = async () => {
      if(!confirm('Recriar categorias padrão?')) return;
   };
+
+  const handleBuyFromShoppingList = async (item: ShoppingItem) => {
+      // Cria a transação baseada no item da lista
+      const newTransaction = {
+         description: item.description,
+         amount: item.amount,
+         category: item.category,
+         user: item.user_name || 'Ambos',
+         type: 'despesa' as TransactionType,
+         date: new Date().toISOString().split('T')[0], // Data de hoje
+         payment_method: 'pix' as PaymentMethod, // Padrão
+         is_paid: true, // Já comprou, então está pago
+         is_recurring: false,
+         recurring_months: 0
+      };
+
+      await handleAddTransaction(newTransaction);
+      // Redireciona para aba de movimentações para ver o item
+      setActiveTab('transactions');
+  };
   
   // Alteração 3: Salvar no localStorage ao ocultar
   const handleToggleHidden = () => {
@@ -1874,6 +2184,7 @@ const App = () => {
                <NavItem id="dashboard" icon={IconPieChart} label="Dashboard" />
                <NavItem id="transactions" icon={IconList} label="Movimentações" />
                <NavItem id="investments" icon={IconTrendingUp} label="Investimentos" />
+               <NavItem id="shopping" icon={IconShoppingCart} label="Lista de Compras" />
                <NavItem id="advisor" icon={IconBrain} label="Consultor IA" />
                <NavItem id="settings" icon={IconSettings} label="Ajustes" />
             </nav>
@@ -1903,7 +2214,7 @@ const App = () => {
                    <IconMenu className="w-6 h-6" />
                 </button>
                 <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white capitalize text-center w-full md:w-auto md:text-left">
-                   {activeTab === 'advisor' ? 'Consultor Financeiro IA' : activeTab === 'dashboard' ? 'Visão Geral' : activeTab === 'transactions' ? 'Movimentações' : activeTab === 'investments' ? 'Carteira' : 'Configurações'}
+                   {activeTab === 'advisor' ? 'Consultor Financeiro IA' : activeTab === 'dashboard' ? 'Visão Geral' : activeTab === 'transactions' ? 'Movimentações' : activeTab === 'shopping' ? 'Lista de Compras' : activeTab === 'investments' ? 'Carteira' : 'Configurações'}
                 </h1>
              </div>
              <div className="flex items-center gap-2 md:gap-4 justify-center w-full md:w-auto">
@@ -1969,6 +2280,14 @@ const App = () => {
                    isLoading={isLoading}
                    currentUser={currentUser}
                    hidden={hidden}
+                />
+             )}
+             {activeTab === 'shopping' && (
+                <ShoppingListPage 
+                   categories={categories}
+                   currentUser={currentUser}
+                   hidden={hidden}
+                   onBuy={handleBuyFromShoppingList}
                 />
              )}
              {activeTab === 'advisor' && (
