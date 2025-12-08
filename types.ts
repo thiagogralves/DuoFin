@@ -74,3 +74,19 @@ export interface AdviceHistoryItem {
   week_of: string; // Data da segunda-feira correspondente (YYYY-MM-DD)
   content: string;
 }
+
+export interface ShoppingItem {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
+  user_name: User;
+  url?: string;
+  image_url?: string;
+  created_at?: string;
+  // Campos alinhados com Transaction
+  type?: TransactionType;
+  payment_method?: PaymentMethod;
+  is_recurring?: boolean;
+  recurring_months?: number;
+}
