@@ -555,8 +555,6 @@ const ShoppingListPage = ({
       url: '',
       type: 'despesa' as TransactionType,
       payment_method: 'pix' as PaymentMethod,
-      is_recurring: false,
-      recurring_months: '',
       user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser
    });
 
@@ -618,8 +616,8 @@ const ShoppingListPage = ({
          url: form.url,
          type: form.type,
          payment_method: form.payment_method,
-         is_recurring: form.is_recurring,
-         recurring_months: form.is_recurring ? Number(form.recurring_months) : 0
+         is_recurring: false,
+         recurring_months: 0
       };
 
       // @ts-ignore - Ignore type error if column doesn't exist yet in Supabase
@@ -633,8 +631,6 @@ const ShoppingListPage = ({
             url: '', 
             type: 'despesa', 
             payment_method: 'pix', 
-            is_recurring: false, 
-            recurring_months: '',
             user_name: currentUser === 'Ambos' ? 'Thiago' : currentUser 
          });
       }
@@ -755,31 +751,6 @@ const ShoppingListPage = ({
                   />
                </div>
                
-               <div className="lg:col-span-2 flex items-center gap-2 pt-1">
-                  <div className="flex items-center h-full">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input 
-                          type="checkbox" 
-                          checked={form.is_recurring} 
-                          onChange={e => setForm({...form, is_recurring: e.target.checked})}
-                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                        />
-                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">Recorrente?</span>
-                    </label>
-                  </div>
-                  {form.is_recurring && (
-                     <div className="w-24">
-                       <input
-                          type="number"
-                          placeholder="Meses"
-                          value={form.recurring_months} 
-                          onChange={e => setForm({...form, recurring_months: e.target.value})}
-                          className="border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm w-full outline-none focus:ring-2 focus:ring-blue-500"
-                       />
-                     </div>
-                  )}
-              </div>
-
                <div className="lg:col-span-2">
                   <Button className="w-full flex items-center justify-center gap-2">
                      <IconPlus className="w-5 h-5" /> Adicionar à Lista
