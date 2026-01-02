@@ -1340,7 +1340,7 @@ const TransactionsPage = ({
      <div className="space-y-6">
         <MonthSelector currentDate={currentDate} onChange={onMonthChange} />
  
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
          <Card className="border-l-4 border-l-emerald-500 bg-white dark:bg-slate-800">
            <div className="flex items-center justify-between">
              <div>
@@ -1352,19 +1352,6 @@ const TransactionsPage = ({
                  <IconWallet className="w-8 h-8" />
              </div>
            </div>
-         </Card>
-         
-         <Card className="border-l-4 border-l-indigo-500 bg-white dark:bg-slate-800">
-            <div className="flex items-center justify-between">
-               <div>
-                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Projeção Final</p>
-                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white">{formatCurrency(monthlyStats.balance - totalPending, hidden)}</h3>
-                  <p className="text-xs text-slate-400 mt-1">Saldo - Pendências</p>
-               </div>
-               <div className="p-3 bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-full">
-                  <IconTarget className="w-8 h-8" />
-               </div>
-            </div>
          </Card>
  
          <Card className="border-l-4 border-l-blue-500 bg-white dark:bg-slate-800">
