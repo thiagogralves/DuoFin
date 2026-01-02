@@ -937,8 +937,7 @@ const TransactionsPage = ({
      e.preventDefault();
      if (!form.description || !form.amount) return;
      
-     const autoPaid = ['dinheiro', 'pix'].includes(form.payment_method);
- 
+     // Alterado: agora todas as transações manuais entram como pendentes (is_paid: false)
      onAdd({
        description: form.description,
        amount: Number(form.amount),
@@ -949,7 +948,7 @@ const TransactionsPage = ({
        is_recurring: form.is_recurring,
        recurring_months: form.is_recurring && form.recurring_months ? Number(form.recurring_months) : 0,
        payment_method: form.payment_method,
-       is_paid: autoPaid
+       is_paid: false
      });
      setForm({ ...form, description: '', amount: '', is_recurring: false, recurring_months: '', payment_method: 'pix' });
      setIsAddModalOpen(false);
@@ -2253,7 +2252,7 @@ const App = () => {
          type: item.type || 'despesa',
          date: new Date().toISOString().split('T')[0], // Data de hoje
          payment_method: item.payment_method || 'pix', 
-         is_paid: true, // Já comprou, então está pago
+         is_paid: false, // Alterado: agora entra como pendente por padrão
          is_recurring: item.is_recurring,
          recurring_months: item.recurring_months
       };
