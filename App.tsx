@@ -2083,6 +2083,39 @@ const App = () => {
            const { data: sData } = await supabase.from('savings_goals').select('*');
            if (sData) setSavingsGoals(sData);
 
+           // Rotina de Manutenção do Banco (Keep-alive)
+           const runKeepAlive = async () => {
+              const now = new Date();
+              const day = now.getDay(); // 1=Seg, 4=Qui, 5=Sex
+              const dateStr = now.toISOString().split('T')[0];
+              const lastMaint = localStorage.getItem('last_database_maint');
+
+              if (lastMaint === dateStr) return;
+
+              try {
+                if (day === 1 || day === 4) { // Lançamento na Segunda e Quinta
+                  const { data } = await supabase.from('transactions').insert([{
+                    description: 'Teste Banco',
+                    amount: 0.01,
+                    type: 'despesa',
+                    category: 'Outros',
+                    user: 'Thiago',
+                    date: dateStr,
+                    payment_method: 'pix',
+                    is_paid: true
+                  }]).select();
+                  if (data) setTransactions(prev => [...data, ...prev]);
+                } else if (day === 5) { // Remoção na Sexta
+                  await supabase.from('transactions').delete().eq('description', 'Teste Banco');
+                  setTransactions(prev => prev.filter(t => t.description !== 'Teste Banco'));
+                }
+                localStorage.setItem('last_database_maint', dateStr);
+              } catch (e) {
+                console.error("Erro na manutenção keep-alive:", e);
+              }
+           };
+           runKeepAlive();
+
         } catch (error) {
            console.error('Error fetching data:', error);
         } finally {
