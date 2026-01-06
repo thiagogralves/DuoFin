@@ -393,7 +393,7 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
               setSelectedReportId(data[0].id);
            }
            const hasReportForThisWeek = data.some((h: any) => h.week_of === currentMondayStr);
-           if (!hasReportForThisWeek && !loading) {
+           if (!hasReportForThisWeek && !loading && transactions.length > 0) {
               generateAdvice(data);
            }
         }
@@ -403,9 +403,17 @@ const AdvisorPage = ({ transactions, investments, currentUser }: { transactions:
   };
 
   const generateAdvice = async (currentHistory: AdviceHistoryItem[]) => {
+    if (loading) return;
     setLoading(true);
     const result = await getFinancialAdvice(transactions, investments);
     
+    // Se o resultado começar com ❌ ou ⚠️, é um erro amigável, não salvamos no banco
+    if (result.startsWith('❌') || result.startsWith('⚠️')) {
+       alert(result);
+       setLoading(false);
+       return;
+    }
+
     const newItem = {
       week_of: currentMondayStr,
       content: result
