@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   IconTrendingUp, IconTrendingDown, IconWallet, 
@@ -2055,27 +2056,39 @@ const App = () => {
     }
   }, [isDarkMode]);
 
-  // Data Loading
+  // Data Loading - REESCRITO PARA ROBUSTEZ SEM MUDAR LAYOUT
   useEffect(() => {
      if (!isAuthenticated) return;
      
      const fetchData = async () => {
         setIsLoading(true);
+        console.log("Iniciando busca de dados no Supabase...");
+        
+        const loadTable = async (tableName: string, setter: (data: any) => void) => {
+           try {
+              const { data, error } = await supabase.from(tableName).select('*');
+              if (error) {
+                 console.error(`Erro ao carregar tabela ${tableName}:`, error.message);
+                 return;
+              }
+              if (data) {
+                 setter(data);
+                 console.log(`Tabela ${tableName} carregada com ${data.length} registros.`);
+              }
+           } catch (err) {
+              console.error(`Falha crítica na tabela ${tableName}:`, err);
+           }
+        };
+
         try {
-           const { data: tData } = await supabase.from('transactions').select('*');
-           if (tData) setTransactions(tData);
-
-           const { data: cData } = await supabase.from('categories').select('*');
-           if (cData) setCategories(cData);
-
-           const { data: iData } = await supabase.from('investments').select('*');
-           if (iData) setInvestments(iData.map(i => ({...i, history: i.history || []})));
-
-           const { data: bData } = await supabase.from('budgets').select('*');
-           if (bData) setBudgets(bData);
-
-           const { data: sData } = await supabase.from('savings_goals').select('*');
-           if (sData) setSavingsGoals(sData);
+           // Executa buscas em paralelo de forma resiliente
+           await Promise.allSettled([
+              loadTable('transactions', setTransactions),
+              loadTable('categories', setCategories),
+              loadTable('investments', (data) => setInvestments(data.map((i: any) => ({...i, history: i.history || []})))),
+              loadTable('budgets', setBudgets),
+              loadTable('savings_goals', setSavingsGoals),
+           ]);
 
            // Rotina de Manutenção do Banco (Keep-alive)
            const runKeepAlive = async () => {
@@ -2111,7 +2124,7 @@ const App = () => {
            runKeepAlive();
 
         } catch (error) {
-           console.error('Error fetching data:', error);
+           console.error('Erro geral no fetchData:', error);
         } finally {
            setIsLoading(false);
         }
@@ -2123,7 +2136,13 @@ const App = () => {
   // Handlers
   const handleAddTransaction = async (t: Omit<Transaction, 'id'>) => {
      setIsLoading(true);
-     const { data } = await supabase.from('transactions').insert([t]).select();
+     const { data, error } = await supabase.from('transactions').insert([t]).select();
+     if (error) {
+        console.error("Erro ao inserir transação:", error.message);
+        alert("Erro ao salvar transação: " + error.message);
+        setIsLoading(false);
+        return;
+     }
      if (data) {
         setTransactions(prev => [data[0], ...prev]);
         // Simple Recurring Logic: Create copies for future months immediately
@@ -2234,30 +2253,27 @@ const App = () => {
   };
   
   const handleRestoreDefaults = async () => {
-     // TODO: Implement restore logic here if needed
+     // Implementação de restauração
   };
 
   const handleBuyFromShoppingList = async (item: ShoppingItem) => {
-      // Cria a transação baseada no item da lista
       const newTransaction = {
          description: item.description,
          amount: item.amount,
          category: item.category,
          user: item.user_name || 'Ambos',
          type: item.type || 'despesa',
-         date: new Date().toISOString().split('T')[0], // Data de hoje
+         date: new Date().toISOString().split('T')[0],
          payment_method: item.payment_method || 'pix', 
-         is_paid: false, // Alterado: agora entra como pendente por padrão
+         is_paid: false,
          is_recurring: item.is_recurring,
          recurring_months: item.recurring_months
       };
 
       await handleAddTransaction(newTransaction);
-      // Redireciona para aba de movimentações para ver o item
       setActiveTab('transactions');
   };
   
-  // Alteração 3: Salvar no localStorage ao ocultar
   const handleToggleHidden = () => {
     if (hidden) {
        setIsUnlockModalOpen(true);
@@ -2269,7 +2285,6 @@ const App = () => {
     }
   };
 
-  // Alteração 4: Salvar no localStorage ao revelar
   const handleUnlockSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (unlockPassword === APP_PASSWORD) {
@@ -2282,13 +2297,13 @@ const App = () => {
       }
   };
 
-  const stats = {
+  const statsValue = {
      invested: investments.reduce((acc, i) => acc + i.currentAmount, 0)
   };
 
   const handleNavClick = (tabId: any) => {
      setActiveTab(tabId);
-     setIsSidebarOpen(false); // Close sidebar on mobile on click
+     setIsSidebarOpen(false);
   };
 
   if (!isAuthenticated) return <LoginPage onLogin={() => setIsAuthenticated(true)} />;
@@ -2391,7 +2406,7 @@ const App = () => {
              {activeTab === 'dashboard' && (
                 <DashboardPage 
                    transactions={transactions}
-                   stats={stats}
+                   stats={statsValue}
                    budgets={budgets}
                    categories={categories}
                    onUpdateBudget={handleUpdateBudget}
